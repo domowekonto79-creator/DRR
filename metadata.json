@@ -1,0 +1,5 @@
+{
+  "name": "DORA Risk Register",
+  "description": "Aplikacja do zarządzania rejestrem ryzyk ICT zgodnie z wymogami rozporządzenia DORA.",
+  "requestFramePermissions": []
+}
