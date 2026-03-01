@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { getSupabase } from '../lib/supabase';
 import { DostawcaICT, ZakresUmowy } from '../types';
-import { Save, X, AlertCircle, Plus, Trash2 } from 'lucide-react';
+import { Save, X, AlertCircle, Plus, Trash2, Loader2, Edit2 } from 'lucide-react';
 
 interface ProviderFormProps {
   provider: DostawcaICT | null;
@@ -38,6 +38,129 @@ const ProviderForm: React.FC<ProviderFormProps> = ({ provider, onSave, onCancel 
   const [formData, setFormData] = useState<Partial<DostawcaICT>>({});
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [loadingLei, setLoadingLei] = useState(false);
+  const [leiStatusAlert, setLeiStatusAlert] = useState<string | null>(null);
+  const [isNameLocked, setIsNameLocked] = useState(false);
+  const [loadingNameSearch, setLoadingNameSearch] = useState(false);
+
+  const fetchParentData = async (lei: string) => {
+    try {
+        const response = await fetch(`https://api.gleif.org/api/v1/lei-records/${lei}`);
+        if (!response.ok) return;
+        const json = await response.json();
+        const name = json.data.attributes.entity.legalName.name;
+        
+        setFormData(prev => ({
+            ...prev,
+            lei_jednostki_dominujacej: lei,
+            nazwa_jednostki_dominujacej: name
+        }));
+    } catch (e) {
+        console.error("Error fetching parent data", e);
+    }
+  };
+
+  const fetchNipFromKrs = async (krs: string) => {
+    try {
+      const response = await fetch(`https://api-krs.ms.gov.pl/api/krs/OdpisAktualny/${krs}?rejestr=P&format=json`);
+      if (!response.ok) return null;
+      const json = await response.json();
+      return json.odpis?.dane?.dzial1?.danePodmiotu?.identyfikatory?.nip;
+    } catch (e) {
+      console.warn("KRS API fetch failed", e);
+      return null;
+    }
+  };
+
+  const fetchGleifData = async (lei: string) => {
+    if (!lei || lei.length !== 20) return;
+
+    setLoadingLei(true);
+    setLeiStatusAlert(null);
+
+    try {
+      // Include direct and ultimate parents to check for capital group
+      const response = await fetch(`https://api.gleif.org/api/v1/lei-records/${lei}?include=direct-parent,ultimate-parent`);
+      if (!response.ok) throw new Error('Nie udało się pobrać danych z GLEIF');
+      
+      const json = await response.json();
+      const data = json.data.attributes;
+      // relationships are in json.data.relationships when using include
+      const relationships = json.data.relationships;
+
+      const legalName = data.entity.legalName.name;
+      const country = data.entity.legalAddress.country;
+      
+      const addressParts = [
+        data.entity.legalAddress.addressLines?.join(', '),
+        data.entity.legalAddress.city,
+        data.entity.legalAddress.postalCode,
+        data.entity.legalAddress.country
+      ].filter(Boolean);
+      const address = addressParts.join(', ');
+
+      const status = data.registration.registrationStatus;
+      if (status !== 'ISSUED') {
+        setLeiStatusAlert(`⚠️ LEI ma status: ${status}. Aktywny status to ISSUED.`);
+      }
+
+      let nip = null;
+      const regAuth = data.registration.registrationAuthority;
+      if (regAuth && regAuth.registrationAuthorityId === 'RA000535' && regAuth.registrationAuthorityEntityId) {
+          const krs = regAuth.registrationAuthorityEntityId;
+          nip = await fetchNipFromKrs(krs);
+      }
+
+      setFormData(prev => ({
+        ...prev,
+        nazwa_prawna: legalName,
+        kraj_rejestracji: country,
+        adres_siedziby: address,
+        nip: nip || prev.nip
+      }));
+      setIsNameLocked(true);
+
+      // Check for parent relationships
+      const directParent = relationships?.['direct-parent']?.data;
+      const ultimateParent = relationships?.['ultimate-parent']?.data;
+      const parent = directParent || ultimateParent;
+
+      if (parent) {
+        setFormData(prev => ({ ...prev, czy_grupa_kapitalowa: true }));
+        await fetchParentData(parent.id);
+      } else {
+        setFormData(prev => ({ ...prev, czy_grupa_kapitalowa: false }));
+      }
+
+    } catch (error) {
+      console.error(error);
+      setLeiStatusAlert('Błąd pobierania danych z GLEIF.');
+    } finally {
+      setLoadingLei(false);
+    }
+  };
+
+  const fetchByLegalName = async (name: string) => {
+      if (!name || name.length < 3) return;
+      
+      setLoadingNameSearch(true);
+      try {
+          const response = await fetch(`https://api.gleif.org/api/v1/lei-records?filter[entity.legalName]=${encodeURIComponent(name)}&page[size]=1`);
+          if (!response.ok) throw new Error('GLEIF Search failed');
+          
+          const json = await response.json();
+          if (json.data && json.data.length > 0) {
+              const record = json.data[0];
+              const lei = record.attributes.lei;
+              setFormData(prev => ({ ...prev, lei }));
+              await fetchGleifData(lei);
+          }
+      } catch (e) {
+          console.error("Name search failed", e);
+      } finally {
+          setLoadingNameSearch(false);
+      }
+  };
 
   useEffect(() => {
     if (provider) {
@@ -200,15 +323,56 @@ const ProviderForm: React.FC<ProviderFormProps> = ({ provider, onSave, onCancel 
             <h3 className="text-lg font-medium leading-6 text-gray-900">Krok 1: Identyfikacja dostawcy</h3>
             <div className="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-6">
               <div className="sm:col-span-3">
-                <label htmlFor="nazwa_prawna" className="block text-sm font-medium text-gray-700">Nazwa Prawna *</label>
-                <input type="text" name="nazwa_prawna" id="nazwa_prawna" value={formData.nazwa_prawna || ''} onChange={handleChange} className={`mt-1 block w-full rounded-md shadow-sm sm:text-sm ${errors.nazwa_prawna ? 'border-red-300 focus:border-red-500 focus:ring-red-500' : 'border-gray-300 focus:border-indigo-500 focus:ring-indigo-500'}`} />
-                {errors.nazwa_prawna && <p className="mt-2 text-sm text-red-600">{errors.nazwa_prawna}</p>}
+                <label htmlFor="lei" className="block text-sm font-medium text-gray-700">LEI *</label>
+                <div className="mt-1 relative rounded-md shadow-sm">
+                  <input 
+                    type="text" 
+                    name="lei" 
+                    id="lei" 
+                    value={formData.lei || ''} 
+                    onChange={handleChange} 
+                    onBlur={(e) => fetchGleifData(e.target.value)}
+                    className={`block w-full rounded-md sm:text-sm ${errors.lei ? 'border-red-300 focus:border-red-500 focus:ring-red-500' : 'border-gray-300 focus:border-indigo-500 focus:ring-indigo-500'}`} 
+                  />
+                  {loadingLei && (
+                    <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                      <Loader2 className="h-5 w-5 text-gray-400 animate-spin" />
+                    </div>
+                  )}
+                </div>
+                {errors.lei && <p className="mt-2 text-sm text-red-600">{errors.lei}</p>}
+                {leiStatusAlert && <p className="mt-2 text-sm text-amber-600 font-medium">{leiStatusAlert}</p>}
               </div>
 
               <div className="sm:col-span-3">
-                <label htmlFor="lei" className="block text-sm font-medium text-gray-700">LEI *</label>
-                <input type="text" name="lei" id="lei" value={formData.lei || ''} onChange={handleChange} className={`mt-1 block w-full rounded-md shadow-sm sm:text-sm ${errors.lei ? 'border-red-300 focus:border-red-500 focus:ring-red-500' : 'border-gray-300 focus:border-indigo-500 focus:ring-indigo-500'}`} />
-                {errors.lei && <p className="mt-2 text-sm text-red-600">{errors.lei}</p>}
+                <label htmlFor="nazwa_prawna" className="block text-sm font-medium text-gray-700">Nazwa Prawna *</label>
+                <div className="mt-1 relative rounded-md shadow-sm">
+                  <input 
+                    type="text" 
+                    name="nazwa_prawna" 
+                    id="nazwa_prawna" 
+                    value={formData.nazwa_prawna || ''} 
+                    onChange={handleChange} 
+                    onBlur={(e) => !isNameLocked && fetchByLegalName(e.target.value)}
+                    readOnly={isNameLocked}
+                    className={`block w-full rounded-md sm:text-sm ${errors.nazwa_prawna ? 'border-red-300 focus:border-red-500 focus:ring-red-500' : 'border-gray-300 focus:border-indigo-500 focus:ring-indigo-500'} ${isNameLocked ? 'bg-gray-100 text-gray-500' : ''}`} 
+                  />
+                  {loadingNameSearch && (
+                    <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                      <Loader2 className="h-5 w-5 text-gray-400 animate-spin" />
+                    </div>
+                  )}
+                  {isNameLocked && !loadingNameSearch && (
+                    <button
+                      type="button"
+                      onClick={() => setIsNameLocked(false)}
+                      className="absolute inset-y-0 right-0 pr-3 flex items-center cursor-pointer"
+                    >
+                      <Edit2 className="h-4 w-4 text-gray-400 hover:text-gray-600" />
+                    </button>
+                  )}
+                </div>
+                {errors.nazwa_prawna && <p className="mt-2 text-sm text-red-600">{errors.nazwa_prawna}</p>}
               </div>
 
               <div className="sm:col-span-3">
