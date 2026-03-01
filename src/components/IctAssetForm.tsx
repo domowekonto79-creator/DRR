@@ -323,11 +323,7 @@ export default function IctAssetForm({ initialData, onSave, onCancel }: IctAsset
     }
   };
 
-  const handleClear = () => {
-    if (window.confirm('Czy na pewno chcesz anulować? Niezapisane zmiany zostaną utracone.')) {
-      onCancel();
-    }
-  };
+
 
   const handleExportCSV = () => {
     // Flatten the data for CSV
@@ -369,7 +365,9 @@ export default function IctAssetForm({ initialData, onSave, onCancel }: IctAsset
       <div className="bg-slate-50 px-6 py-4 border-b border-slate-200 sticky top-0 z-10">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
-            <h2 className="text-xl font-semibold text-slate-800">Karta Zasobu ICT</h2>
+            <h2 className="text-xl font-semibold text-slate-800">
+              Karta Zasobu ICT {initialData ? `- ${formData.name}` : ''}
+            </h2>
             <p className="text-sm text-slate-500">Wypełnij dane zasobu zgodnie z wymogami DORA</p>
           </div>
           <div className="flex items-center space-x-3 w-full sm:w-auto">
@@ -391,7 +389,7 @@ export default function IctAssetForm({ initialData, onSave, onCancel }: IctAsset
               <button onClick={handleExportCSV} className="inline-flex items-center px-3 py-2 border border-slate-300 rounded-md shadow-sm text-sm font-medium text-slate-700 bg-white hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500" title="Eksportuj do CSV">
                 <Download className="h-4 w-4" />
               </button>
-              <button onClick={handleClear} className="inline-flex items-center px-3 py-2 border border-slate-300 rounded-md shadow-sm text-sm font-medium text-rose-600 bg-white hover:bg-rose-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-rose-500" title="Anuluj">
+              <button onClick={onCancel} className="inline-flex items-center px-3 py-2 border border-slate-300 rounded-md shadow-sm text-sm font-medium text-rose-600 bg-white hover:bg-rose-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-rose-500" title="Anuluj">
                 <X className="h-4 w-4" />
               </button>
             </div>

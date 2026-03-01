@@ -6,9 +6,10 @@ interface IctAssetTableProps {
   assets: IctAsset[];
   onEdit: (asset: IctAsset) => void;
   onDelete: (id: string) => void;
+  onCancel: () => void;
 }
 
-export default function IctAssetTable({ assets, onEdit, onDelete }: IctAssetTableProps) {
+export default function IctAssetTable({ assets, onEdit, onDelete, onCancel }: IctAssetTableProps) {
   if (assets.length === 0) {
     return (
       <div className="text-center py-12 bg-white rounded-lg border border-slate-200 shadow-sm">

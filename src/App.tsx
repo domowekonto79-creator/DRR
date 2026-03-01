@@ -319,6 +319,7 @@ export default function App() {
                   assets={assets}
                   onEdit={handleEditAsset}
                   onDelete={handleDeleteAsset}
+                  onCancel={handleCancelAsset}
                 />
               </>
             ) : (
