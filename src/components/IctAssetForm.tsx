@@ -94,14 +94,21 @@ export default function IctAssetForm({ initialData, onSave, onCancel }: IctAsset
         
         const [klifsRes, risksRes] = await Promise.all([
           supabase.from('klif').select('id, name').order('name'),
-          supabase.from('risks').select('id, scenario, actionStatus').order('scenario')
+          supabase.from('risks').select('id, data')
         ]);
         
         if (klifsRes.error) throw klifsRes.error;
         if (risksRes.error) throw risksRes.error;
         
         setAvailableKlifs(klifsRes.data || []);
-        setAvailableRisks(risksRes.data || []);
+        
+        const risksData = risksRes.data?.map(r => ({
+          id: r.id,
+          scenario: r.data.scenario,
+          actionStatus: r.data.actionStatus
+        })).sort((a, b) => a.scenario.localeCompare(b.scenario)) || [];
+        
+        setAvailableRisks(risksData);
       } catch (err) {
         console.error('Error fetching data:', err);
       }
