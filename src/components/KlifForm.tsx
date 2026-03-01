@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Klif, KlifProcess, KlifIctAsset, KlifProvider, KlifDependency, IctAsset } from '../types';
+import { Klif, KlifProcess, KlifIctAsset, KlifProvider, KlifDependency, IctAsset, DostawcaICT } from '../types';
 import { getSupabase } from '../lib/supabase';
 import { Save, X, Plus, Trash2, AlertCircle } from 'lucide-react';
 import IctAssetForm from './IctAssetForm';
@@ -51,6 +51,7 @@ export default function KlifForm({ initialData, onSave, onCancel }: KlifFormProp
   const [currentStep, setCurrentStep] = useState(1);
   const totalSteps = 6;
   const [assets, setAssets] = useState<IctAsset[]>([]);
+  const [availableProviders, setAvailableProviders] = useState<DostawcaICT[]>([]);
   const [isAssetFormOpen, setIsAssetFormOpen] = useState(false);
 
   const fetchAssets = async () => {
@@ -67,8 +68,23 @@ export default function KlifForm({ initialData, onSave, onCancel }: KlifFormProp
     }
   };
 
+  const fetchProviders = async () => {
+    const supabase = getSupabase();
+    if (!supabase) return;
+    try {
+      const { data, error } = await supabase.from('dostawcy_ict').select('*');
+      if (error) throw error;
+      if (data) {
+        setAvailableProviders(data as DostawcaICT[]);
+      }
+    } catch (error) {
+      console.error("Error fetching providers:", error);
+    }
+  };
+
   useEffect(() => {
     fetchAssets();
+    fetchProviders();
   }, []);
 
   useEffect(() => {
@@ -258,6 +274,11 @@ export default function KlifForm({ initialData, onSave, onCancel }: KlifFormProp
         </select>
       </div>
     );
+  };
+
+  const getProviderProvisions = (providerName: string) => {
+    const provider = availableProviders.find(p => p.nazwa_prawna === providerName);
+    return provider?.zakres_umowy || [];
   };
 
   return (
@@ -507,11 +528,33 @@ export default function KlifForm({ initialData, onSave, onCancel }: KlifFormProp
                 <div key={p.id} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 items-end bg-slate-50 p-4 rounded-lg border border-slate-200">
                   <div className="lg:col-span-2">
                     <label className="block text-xs font-medium text-slate-700 mb-1">Nazwa dostawcy</label>
-                    <input type="text" value={p.name} onChange={(e) => updateProvider(p.id, 'name', e.target.value)} className="w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border" />
+                    <select
+                      value={p.name}
+                      onChange={(e) => {
+                        updateProvider(p.id, 'name', e.target.value);
+                        updateProvider(p.id, 'service_type', '');
+                      }}
+                      className="w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border"
+                    >
+                      <option value="">Wybierz dostawcę...</option>
+                      {availableProviders.map(prov => (
+                        <option key={prov.id} value={prov.nazwa_prawna}>{prov.nazwa_prawna}</option>
+                      ))}
+                    </select>
                   </div>
                   <div className="lg:col-span-2">
-                    <label className="block text-xs font-medium text-slate-700 mb-1">Rodzaj usługi</label>
-                    <input type="text" value={p.service_type} onChange={(e) => updateProvider(p.id, 'service_type', e.target.value)} className="w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border" />
+                    <label className="block text-xs font-medium text-slate-700 mb-1">Rodzaj postanowienia</label>
+                    <select
+                      value={p.service_type}
+                      onChange={(e) => updateProvider(p.id, 'service_type', e.target.value)}
+                      className="w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border"
+                      disabled={!p.name}
+                    >
+                      <option value="">Wybierz...</option>
+                      {getProviderProvisions(p.name).map((z, idx) => (
+                        <option key={idx} value={z.rodzaj_postanowienia}>{z.rodzaj_postanowienia}</option>
+                      ))}
+                    </select>
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-slate-700 mb-1">Ryzyko koncentracji</label>

@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from "react";
-import { Shield, LayoutDashboard, List, Plus, Server, LogOut, Activity, Settings } from "lucide-react";
+import { Shield, LayoutDashboard, List, Plus, Server, LogOut, Activity, Settings, Users } from "lucide-react";
 import { RiskEntry, IctAsset } from "./types";
 import { INITIAL_RISKS } from "./constants";
 import Dashboard from "./components/Dashboard";
@@ -14,12 +14,13 @@ import IctAssetForm from "./components/IctAssetForm";
 import IctAssetTable from "./components/IctAssetTable";
 import KlifView from "./components/KlifView";
 import ConfigurationView from "./components/ConfigurationView";
+import ProvidersView from "./components/ProvidersView";
 import SetupScreen from "./components/SetupScreen";
 import { getSupabase, clearSupabaseConfig } from "./lib/supabase";
 
 export default function App() {
   const [isConfigured, setIsConfigured] = useState<boolean>(!!getSupabase());
-  const [activeTab, setActiveTab] = useState<"dashboard" | "register" | "assets" | "klif" | "config">(
+  const [activeTab, setActiveTab] = useState<"dashboard" | "register" | "assets" | "klif" | "config" | "providers">(
     "dashboard",
   );
   const [risks, setRisks] = useState<RiskEntry[]>([]);
@@ -38,7 +39,10 @@ export default function App() {
     const fetchData = async () => {
       setIsLoading(true);
       const supabase = getSupabase();
-      if (!supabase) return;
+      if (!supabase) {
+        setIsLoading(false);
+        return;
+      }
 
       try {
         // Fetch risks
@@ -250,6 +254,17 @@ export default function App() {
                 KLIF
               </button>
               <button
+                onClick={() => setActiveTab("providers")}
+                className={`flex items-center px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                  activeTab === "providers"
+                    ? "bg-slate-800 text-white"
+                    : "text-slate-300 hover:bg-slate-800 hover:text-white"
+                }`}
+              >
+                <Users className="h-4 w-4 mr-2 hidden sm:block" />
+                Dostawcy
+              </button>
+              <button
                 onClick={() => setActiveTab("config")}
                 className={`flex items-center px-3 py-2 rounded-md text-sm font-medium transition-colors ${
                   activeTab === "config"
@@ -334,6 +349,7 @@ export default function App() {
 
         {activeTab === "klif" && <KlifView />}
         {activeTab === "config" && <ConfigurationView />}
+        {activeTab === "providers" && <ProvidersView />}
       </main>
 
       {/* Modals */}

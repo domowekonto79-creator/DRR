@@ -51,6 +51,106 @@ export interface RelatedAsset {
   assetName: string;
 }
 
+
+
+export interface ZakresUmowy {
+  id: string;
+  rodzaj_postanowienia: string;
+  kategoria_uslugi: string;
+}
+
+export interface DostawcaICT {
+  id: string;
+  created_at: string;
+  updated_at: string;
+  autor_wpisu: string;
+  nazwa_prawna: string;
+  lei: string;
+  nip?: string;
+  kraj_rejestracji: string;
+  adres_siedziby?: string;
+  typ_dostawcy: 'Zewnętrzny' | 'Wewnątrzgrupowy';
+  czy_grupa_kapitalowa: boolean;
+  nazwa_jednostki_dominujacej?: string;
+  lei_jednostki_dominujacej?: string;
+  czy_kluczowy_dostawca_esa: boolean;
+  numer_referencyjny_umowy: string;
+  data_zawarcia_umowy: string;
+  data_wygasniecia_umowy?: string;
+  opcje_przedluzenia: boolean;
+  opcje_przedluzenia_opis?: string;
+  waluta?: string;
+  wartosc_kontraktu?: number;
+  prawo_wlasciwe?: string;
+  jurysdykcja_sadu?: string;
+  zakres_umowy?: ZakresUmowy[];
+  klauzula_prawo_audytu: boolean;
+  klauzula_prawo_wypowiedzenia: boolean;
+  klauzula_raportowanie_incydentow: boolean;
+  klauzula_sla: boolean;
+  klauzula_bcp_dostawcy: boolean;
+  klauzula_zmiany_podwykonawcow: boolean;
+  kraje_przetwarzania: string[];
+  kraje_przechowywania: string[];
+  czy_poza_eog: boolean;
+  uzasadnienie_poza_eog?: string;
+  typy_danych: string[];
+  model_wdrozenia?: 'Chmura publiczna' | 'Chmura prywatna' | 'Chmura hybrydowa' | 'On-premise' | 'Mieszany';
+  ryzyko_koncentracji?: 'Niskie' | 'Średnie' | 'Wysokie';
+  zastepowanosc?: 'Łatwa' | 'Trudna' | 'Niemożliwa';
+  alternatywni_dostawcy?: string;
+  ocena_ryzyka_wartosc?: number;
+  ocena_ryzyka_uzasadnienie?: string;
+  wplyw_poufnosc?: 'Niski' | 'Średni' | 'Wysoki' | 'Krytyczny';
+  wplyw_integralnosc?: 'Niski' | 'Średni' | 'Wysoki' | 'Krytyczny';
+  wplyw_dostepnosc?: 'Niski' | 'Średni' | 'Wysoki' | 'Krytyczny';
+  data_ostatniej_oceny?: string;
+  data_kolejnego_przegladu?: string;
+  rto_wartosc?: number;
+  rto_jednostka?: 'minuty' | 'godziny' | 'dni';
+  rpo_wartosc?: number;
+  rpo_jednostka?: 'minuty' | 'godziny' | 'dni';
+  czy_certyfikowany_bcp: boolean;
+  bcp_certyfikat?: string;
+  exit_plan_okres_wypowiedzenia?: number;
+  exit_plan_opis_migracji?: string;
+  exit_plan_ryzyko_danych?: string;
+  exit_plan_czas_migracji_dni?: number;
+  prawo_audytu_status: boolean;
+  data_ostatniego_audytu?: string;
+  wynik_audytu?: 'Pozytywny' | 'Z zastrzeżeniami' | 'Negatywny';
+  data_ostatniego_przegladu?: string;
+  uwagi?: string;
+}
+
+export interface UslugaICT {
+  id: string;
+  dostawca_id: string;
+  identyfikator_uslugi: string;
+  kategoria_uslugi: string;
+  opis_uslugi?: string;
+  czy_wspiera_klif: boolean;
+}
+
+export interface PowiazanieKLIF {
+  id: string;
+  dostawca_id: string;
+  usluga_id: string;
+  klif_id?: string;
+  klif_nazwa: string;
+  numer_referencyjny_umowy: string;
+}
+
+export interface Podwykonawca {
+  id: string;
+  dostawca_id: string;
+  nazwa_poddostawcy: string;
+  lei_poddostawcy?: string;
+  kraj?: string;
+  kategoria_uslugi?: string;
+  ranga_lancucha: number;
+}
+
 export interface IctAsset {
   id: string;
   name: string;

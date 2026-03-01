@@ -93,6 +93,80 @@ ALTER TABLE klif_procesy DISABLE ROW LEVEL SECURITY;
 ALTER TABLE klif_zasoby_ict DISABLE ROW LEVEL SECURITY;
 ALTER TABLE klif_dostawcy DISABLE ROW LEVEL SECURITY;
 ALTER TABLE klif_zaleznosci DISABLE ROW LEVEL SECURITY;
+
+-- 5. Tworzenie tabeli dla dostawców ICT
+CREATE TABLE IF NOT EXISTS dostawcy_ict (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  autor_wpisu TEXT NOT NULL,
+  nazwa_prawna TEXT NOT NULL,
+  lei TEXT NOT NULL UNIQUE,
+  nip TEXT,
+  kraj_rejestracji CHAR(2) NOT NULL,
+  adres_siedziby TEXT,
+  typ_dostawcy TEXT CHECK (typ_dostawcy IN ('Zewnętrzny','Wewnątrzgrupowy')) NOT NULL,
+  czy_grupa_kapitalowa BOOLEAN DEFAULT FALSE,
+  nazwa_jednostki_dominujacej TEXT,
+  lei_jednostki_dominujacej TEXT,
+  czy_kluczowy_dostawca_esa BOOLEAN DEFAULT FALSE,
+  numer_referencyjny_umowy TEXT NOT NULL UNIQUE,
+  data_zawarcia_umowy DATE NOT NULL,
+  data_wygasniecia_umowy DATE,
+  opcje_przedluzenia BOOLEAN DEFAULT FALSE,
+  opcje_przedluzenia_opis TEXT,
+  waluta CHAR(3),
+  wartosc_kontraktu NUMERIC,
+  prawo_wlasciwe TEXT,
+  jurysdykcja_sadu TEXT,
+  klauzula_prawo_audytu BOOLEAN DEFAULT FALSE,
+  klauzula_prawo_wypowiedzenia BOOLEAN DEFAULT FALSE,
+  klauzula_raportowanie_incydentow BOOLEAN DEFAULT FALSE,
+  klauzula_sla BOOLEAN DEFAULT FALSE,
+  klauzula_bcp_dostawcy BOOLEAN DEFAULT FALSE,
+  klauzula_zmiany_podwykonawcow BOOLEAN DEFAULT FALSE,
+  zakres_umowy JSONB DEFAULT '[]'::jsonb,
+  kraje_przetwarzania TEXT[],
+  kraje_przechowywania TEXT[],
+  czy_poza_eog BOOLEAN DEFAULT FALSE,
+  uzasadnienie_poza_eog TEXT,
+  typy_danych TEXT[],
+  model_wdrozenia TEXT CHECK (model_wdrozenia IN ('Chmura publiczna', 'Chmura prywatna', 'Chmura hybrydowa', 'On-premise', 'Mieszany')),
+  ryzyko_koncentracji TEXT CHECK (ryzyko_koncentracji IN ('Niskie', 'Średnie', 'Wysokie')),
+  zastepowanosc TEXT CHECK (zastepowanosc IN ('Łatwa', 'Trudna', 'Niemożliwa')),
+  alternatywni_dostawcy TEXT,
+  ocena_ryzyka_wartosc NUMERIC,
+  ocena_ryzyka_uzasadnienie TEXT,
+  wplyw_poufnosc TEXT CHECK (wplyw_poufnosc IN ('Niski', 'Średni', 'Wysoki', 'Krytyczny')),
+  wplyw_integralnosc TEXT CHECK (wplyw_integralnosc IN ('Niski', 'Średni', 'Wysoki', 'Krytyczny')),
+  wplyw_dostepnosc TEXT CHECK (wplyw_dostepnosc IN ('Niski', 'Średni', 'Wysoki', 'Krytyczny')),
+  data_ostatniej_oceny DATE,
+  data_kolejnego_przegladu DATE,
+  rto_wartosc INTEGER,
+  rto_jednostka TEXT CHECK (rto_jednostka IN ('minuty', 'godziny', 'dni')),
+  rpo_wartosc INTEGER,
+  rpo_jednostka TEXT CHECK (rpo_jednostka IN ('minuty', 'godziny', 'dni')),
+  czy_certyfikowany_bcp BOOLEAN DEFAULT FALSE,
+  bcp_certyfikat TEXT,
+  exit_plan_okres_wypowiedzenia INTEGER,
+  exit_plan_opis_migracji TEXT,
+  exit_plan_ryzyko_danych TEXT,
+  exit_plan_czas_migracji_dni INTEGER,
+  prawo_audytu_status BOOLEAN DEFAULT FALSE,
+  data_ostatniego_audytu DATE,
+  wynik_audytu TEXT CHECK (wynik_audytu IN ('Pozytywny', 'Z zastrzeżeniami', 'Negatywny')),
+  data_ostatniego_przegladu DATE,
+  uwagi TEXT
+);
+ALTER TABLE dostawcy_ict DISABLE ROW LEVEL SECURITY;
+
+-- 6. Aktualizacja schematu (jeśli tabela już istnieje)
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'dostawcy_ict' AND column_name = 'zakres_umowy') THEN
+        ALTER TABLE dostawcy_ict ADD COLUMN zakres_umowy JSONB DEFAULT '[]'::jsonb;
+    END IF;
+END $$;
 `;
 
 export default function ConfigurationView() {

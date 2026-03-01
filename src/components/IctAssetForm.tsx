@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { IctAsset, IctProvider, BusinessFunction, IctRisk, IctVulnerability, RelatedAsset } from '../types';
-import { Save, Download, Trash2, Plus, X, AlertCircle } from 'lucide-react';
+import { IctAsset, IctProvider, BusinessFunction, IctRisk, IctVulnerability, RelatedAsset, DostawcaICT } from '../types';
+import { Save, Download, Trash2, Plus, X, AlertCircle, CheckCircle } from 'lucide-react';
 import { getSupabase } from '../lib/supabase';
 
 const DEFAULT_ASSET: IctAsset = {
@@ -69,6 +69,8 @@ export default function IctAssetForm({ initialData, onSave, onCancel }: IctAsset
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [availableKlifs, setAvailableKlifs] = useState<{ id: string, name: string }[]>([]);
   const [availableRisks, setAvailableRisks] = useState<{ id: string, scenario: string, actionStatus: string }[]>([]);
+  const [availableProviders, setAvailableProviders] = useState<DostawcaICT[]>([]);
+  const [availableAssets, setAvailableAssets] = useState<IctAsset[]>([]);
 
   const [currentStep, setCurrentStep] = useState(1);
   const totalSteps = 7;
@@ -92,15 +94,21 @@ export default function IctAssetForm({ initialData, onSave, onCancel }: IctAsset
         const supabase = getSupabase();
         if (!supabase) return;
         
-        const [klifsRes, risksRes] = await Promise.all([
+        const [klifsRes, risksRes, providersRes, assetsRes] = await Promise.all([
           supabase.from('klif').select('id, name').order('name'),
-          supabase.from('risks').select('id, data')
+          supabase.from('risks').select('id, data'),
+          supabase.from('dostawcy_ict').select('*'),
+          supabase.from('ict_assets').select('data')
         ]);
         
         if (klifsRes.error) throw klifsRes.error;
         if (risksRes.error) throw risksRes.error;
+        if (providersRes.error) throw providersRes.error;
+        if (assetsRes.error) throw assetsRes.error;
         
         setAvailableKlifs(klifsRes.data || []);
+        setAvailableProviders(providersRes.data as DostawcaICT[] || []);
+        setAvailableAssets(assetsRes.data?.map((row: any) => row.data as IctAsset) || []);
         
         const risksData = risksRes.data?.map(r => ({
           id: r.id,
@@ -359,6 +367,11 @@ export default function IctAssetForm({ initialData, onSave, onCancel }: IctAsset
   const showSecuritySection = formData.criticality === 'Krytyczna' || formData.criticality === 'Ważna';
   const showDependenciesSection = formData.criticality === 'Krytyczna';
 
+  const getProviderProvisions = (providerName: string) => {
+    const provider = availableProviders.find(p => p.nazwa_prawna === providerName);
+    return provider?.zakres_umowy || [];
+  };
+
   return (
     <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
       {/* Header & Progress */}
@@ -548,8 +561,30 @@ export default function IctAssetForm({ initialData, onSave, onCancel }: IctAsset
                 <div className="space-y-2">
                   {formData.providers.map((provider) => (
                     <div key={provider.id} className="flex items-center gap-2 bg-slate-50 p-2 rounded-md border border-slate-200">
-                      <input type="text" placeholder="Nazwa dostawcy" value={provider.name} onChange={(e) => handleProviderChange(provider.id, 'name', e.target.value)} className="flex-1 rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-1.5 border" />
-                      <input type="text" placeholder="Rodzaj usługi" value={provider.serviceType} onChange={(e) => handleProviderChange(provider.id, 'serviceType', e.target.value)} className="flex-1 rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-1.5 border" />
+                      <select
+                        value={provider.name}
+                        onChange={(e) => {
+                           handleProviderChange(provider.id, 'name', e.target.value);
+                           handleProviderChange(provider.id, 'serviceType', '');
+                        }}
+                        className="flex-1 rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-1.5 border"
+                      >
+                        <option value="">Wybierz dostawcę...</option>
+                        {availableProviders.map(p => (
+                          <option key={p.id} value={p.nazwa_prawna}>{p.nazwa_prawna}</option>
+                        ))}
+                      </select>
+                      <select
+                        value={provider.serviceType}
+                        onChange={(e) => handleProviderChange(provider.id, 'serviceType', e.target.value)}
+                        className="flex-1 rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-1.5 border"
+                        disabled={!provider.name}
+                      >
+                         <option value="">Wybierz postanowienie...</option>
+                         {getProviderProvisions(provider.name).map((z, idx) => (
+                           <option key={idx} value={z.rodzaj_postanowienia}>{z.rodzaj_postanowienia}</option>
+                         ))}
+                      </select>
                       <button type="button" onClick={() => handleProviderRemove(provider.id)} className="p-1.5 text-rose-500 hover:bg-rose-100 rounded-md transition-colors">
                         <X className="h-4 w-4" />
                       </button>
@@ -579,7 +614,7 @@ export default function IctAssetForm({ initialData, onSave, onCancel }: IctAsset
                       <span className="mt-1 flex items-center text-xs text-slate-500">Wspiera krytyczne funkcje biznesowe.</span>
                     </span>
                   </span>
-                  <CheckCircleIcon className={`h-5 w-5 ${formData.criticality === 'Krytyczna' ? 'text-rose-600' : 'invisible'}`} />
+                  <CheckCircle className={`h-5 w-5 ${formData.criticality === 'Krytyczna' ? 'text-rose-600' : 'invisible'}`} />
                 </label>
                 
                 <label className={`relative flex cursor-pointer rounded-lg border bg-white p-4 shadow-sm focus:outline-none ${formData.criticality === 'Ważna' ? 'border-amber-500 ring-1 ring-amber-500' : 'border-slate-300'}`}>
@@ -590,7 +625,7 @@ export default function IctAssetForm({ initialData, onSave, onCancel }: IctAsset
                       <span className="mt-1 flex items-center text-xs text-slate-500">Istotny wpływ na działalność.</span>
                     </span>
                   </span>
-                  <CheckCircleIcon className={`h-5 w-5 ${formData.criticality === 'Ważna' ? 'text-amber-600' : 'invisible'}`} />
+                  <CheckCircle className={`h-5 w-5 ${formData.criticality === 'Ważna' ? 'text-amber-600' : 'invisible'}`} />
                 </label>
 
                 <label className={`relative flex cursor-pointer rounded-lg border bg-white p-4 shadow-sm focus:outline-none ${formData.criticality === 'Standardowa' ? 'border-emerald-500 ring-1 ring-emerald-500' : 'border-slate-300'}`}>
@@ -601,7 +636,7 @@ export default function IctAssetForm({ initialData, onSave, onCancel }: IctAsset
                       <span className="mt-1 flex items-center text-xs text-slate-500">Standardowe wsparcie operacyjne.</span>
                     </span>
                   </span>
-                  <CheckCircleIcon className={`h-5 w-5 ${formData.criticality === 'Standardowa' ? 'text-emerald-600' : 'invisible'}`} />
+                  <CheckCircle className={`h-5 w-5 ${formData.criticality === 'Standardowa' ? 'text-emerald-600' : 'invisible'}`} />
                 </label>
               </div>
             </div>
@@ -880,8 +915,30 @@ export default function IctAssetForm({ initialData, onSave, onCancel }: IctAsset
                 <div className="space-y-2">
                   {formData.providers.map((provider) => (
                     <div key={provider.id} className="flex items-center gap-2 bg-slate-50 p-2 rounded-md border border-slate-200">
-                      <input type="text" placeholder="Nazwa dostawcy" value={provider.name} onChange={(e) => handleProviderChange(provider.id, 'name', e.target.value)} className="flex-1 rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-1.5 border" />
-                      <input type="text" placeholder="Rodzaj usługi" value={provider.serviceType} onChange={(e) => handleProviderChange(provider.id, 'serviceType', e.target.value)} className="flex-1 rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-1.5 border" />
+                      <select
+                        value={provider.name}
+                        onChange={(e) => {
+                           handleProviderChange(provider.id, 'name', e.target.value);
+                           handleProviderChange(provider.id, 'serviceType', '');
+                        }}
+                        className="flex-1 rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-1.5 border"
+                      >
+                        <option value="">Wybierz dostawcę...</option>
+                        {availableProviders.map(p => (
+                          <option key={p.id} value={p.nazwa_prawna}>{p.nazwa_prawna}</option>
+                        ))}
+                      </select>
+                      <select
+                        value={provider.serviceType}
+                        onChange={(e) => handleProviderChange(provider.id, 'serviceType', e.target.value)}
+                        className="flex-1 rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-1.5 border"
+                        disabled={!provider.name}
+                      >
+                         <option value="">Wybierz postanowienie...</option>
+                         {getProviderProvisions(provider.name).map((z, idx) => (
+                           <option key={idx} value={z.rodzaj_postanowienia}>{z.rodzaj_postanowienia}</option>
+                         ))}
+                      </select>
                       <button type="button" onClick={() => handleProviderRemove(provider.id)} className="p-1.5 text-rose-500 hover:bg-rose-100 rounded-md transition-colors">
                         <X className="h-4 w-4" />
                       </button>
@@ -917,8 +974,23 @@ export default function IctAssetForm({ initialData, onSave, onCancel }: IctAsset
                   <div className="space-y-2">
                     {formData.relatedAssets.map((asset) => (
                       <div key={asset.id} className="flex items-center gap-2 bg-slate-50 p-2 rounded-md border border-slate-200">
-                        <input type="text" placeholder="ID zasobu" value={asset.assetId} onChange={(e) => handleRelatedAssetChange(asset.id, 'assetId', e.target.value)} className="w-48 rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-1.5 border font-mono" />
-                        <input type="text" placeholder="Nazwa zasobu" value={asset.assetName} onChange={(e) => handleRelatedAssetChange(asset.id, 'assetName', e.target.value)} className="flex-1 rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-1.5 border" />
+                        <input type="text" placeholder="ID zasobu" value={asset.assetId} readOnly className="w-48 rounded-md border-slate-300 shadow-sm bg-slate-100 text-slate-500 sm:text-sm p-1.5 border font-mono" />
+                        <select
+                          value={asset.assetName}
+                          onChange={(e) => {
+                            const selectedAsset = availableAssets.find(a => a.name === e.target.value);
+                            handleRelatedAssetChange(asset.id, 'assetName', e.target.value);
+                            if (selectedAsset) {
+                              handleRelatedAssetChange(asset.id, 'assetId', selectedAsset.id);
+                            }
+                          }}
+                          className="flex-1 rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-1.5 border"
+                        >
+                          <option value="">Wybierz zasób...</option>
+                          {availableAssets.filter(a => a.id !== formData.id).map(a => (
+                            <option key={a.id} value={a.name}>{a.name}</option>
+                          ))}
+                        </select>
                         <button type="button" onClick={() => handleRelatedAssetRemove(asset.id)} className="p-1.5 text-rose-500 hover:bg-rose-100 rounded-md transition-colors">
                           <X className="h-4 w-4" />
                         </button>
