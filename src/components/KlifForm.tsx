@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Klif, KlifProcess, KlifIctAsset, KlifProvider, KlifDependency, IctAsset, DostawcaICT } from '../types';
+import { Klif, KlifProcess, KlifIctAsset, KlifProvider, KlifDependency, IctAsset, DostawcaICT, Employee, Department } from '../types';
 import { getSupabase } from '../lib/supabase';
 import { Save, X, Plus, Trash2, AlertCircle } from 'lucide-react';
 import IctAssetForm from './IctAssetForm';
@@ -52,6 +52,8 @@ export default function KlifForm({ initialData, onSave, onCancel }: KlifFormProp
   const totalSteps = 6;
   const [assets, setAssets] = useState<IctAsset[]>([]);
   const [availableProviders, setAvailableProviders] = useState<DostawcaICT[]>([]);
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [departments, setDepartments] = useState<Department[]>([]);
   const [isAssetFormOpen, setIsAssetFormOpen] = useState(false);
 
   const fetchAssets = async () => {
@@ -82,9 +84,24 @@ export default function KlifForm({ initialData, onSave, onCancel }: KlifFormProp
     }
   };
 
+  const fetchEmployeesAndDepartments = async () => {
+    const supabase = getSupabase();
+    if (!supabase) return;
+    try {
+      const { data: emps } = await supabase.from('employees').select('*');
+      if (emps) setEmployees(emps);
+      
+      const { data: depts } = await supabase.from('departments').select('*');
+      if (depts) setDepartments(depts);
+    } catch (error) {
+      console.error("Error fetching employees/departments:", error);
+    }
+  };
+
   useEffect(() => {
     fetchAssets();
     fetchProviders();
+    fetchEmployeesAndDepartments();
   }, []);
 
   useEffect(() => {
@@ -326,7 +343,7 @@ export default function KlifForm({ initialData, onSave, onCancel }: KlifFormProp
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="md:col-span-2">
                 <label className="block text-sm font-medium text-slate-700 mb-1">Nazwa funkcji <span className="text-rose-500">*</span></label>
-                <input type="text" name="name" value={formData.name} onChange={handleChange} className={`w-full rounded-md shadow-sm sm:text-sm p-2 border ${errors.name ? 'border-rose-300 focus:ring-rose-500' : 'border-slate-300 focus:ring-indigo-500'}`} />
+                <input type="text" name="name" value={formData.name ?? ''} onChange={handleChange} className={`w-full rounded-md shadow-sm sm:text-sm p-2 border ${errors.name ? 'border-rose-300 focus:ring-rose-500' : 'border-slate-300 focus:ring-indigo-500'}`} />
                 {errors.name && <p className="mt-1 text-sm text-rose-500">{errors.name}</p>}
               </div>
 
@@ -356,19 +373,43 @@ export default function KlifForm({ initialData, onSave, onCancel }: KlifFormProp
                     {formData.classification_justification.length} / min. 50 znaków
                   </span>
                 </div>
-                <textarea name="classification_justification" value={formData.classification_justification} onChange={handleChange} rows={3} className={`w-full rounded-md shadow-sm sm:text-sm p-2 border ${errors.classification_justification ? 'border-rose-300 focus:ring-rose-500' : 'border-slate-300 focus:ring-indigo-500'}`} placeholder="Min. 50 znaków..." />
+                <textarea name="classification_justification" value={formData.classification_justification ?? ''} onChange={handleChange} rows={3} className={`w-full rounded-md shadow-sm sm:text-sm p-2 border ${errors.classification_justification ? 'border-rose-300 focus:ring-rose-500' : 'border-slate-300 focus:ring-indigo-500'}`} placeholder="Min. 50 znaków..." />
                 {errors.classification_justification && <p className="mt-1 text-sm text-rose-500">{errors.classification_justification}</p>}
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Właściciel funkcji <span className="text-rose-500">*</span></label>
-                <input type="text" name="owner" value={formData.owner} onChange={handleChange} className={`w-full rounded-md shadow-sm sm:text-sm p-2 border ${errors.owner ? 'border-rose-300 focus:ring-rose-500' : 'border-slate-300 focus:ring-indigo-500'}`} />
+                <select 
+                  name="owner" 
+                  value={formData.owner ?? ''} 
+                  onChange={handleChange} 
+                  className={`w-full rounded-md shadow-sm sm:text-sm p-2 border ${errors.owner ? 'border-rose-300 focus:ring-rose-500' : 'border-slate-300 focus:ring-indigo-500'}`}
+                >
+                  <option value="">Wybierz właściciela...</option>
+                  {employees.map(emp => (
+                    <option key={emp.id} value={`${emp.first_name} ${emp.last_name}`}>
+                      {emp.first_name} {emp.last_name} ({emp.position})
+                    </option>
+                  ))}
+                </select>
                 {errors.owner && <p className="mt-1 text-sm text-rose-500">{errors.owner}</p>}
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Jednostka organizacyjna</label>
-                <input type="text" name="owner_unit" value={formData.owner_unit} onChange={handleChange} className="w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border" />
+                <select 
+                  name="owner_unit" 
+                  value={formData.owner_unit ?? ''} 
+                  onChange={handleChange} 
+                  className="w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border"
+                >
+                  <option value="">Wybierz jednostkę...</option>
+                  {departments.map(dept => (
+                    <option key={dept.id} value={dept.name}>
+                      {dept.name}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div>
@@ -384,7 +425,19 @@ export default function KlifForm({ initialData, onSave, onCancel }: KlifFormProp
 
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Autor wpisu <span className="text-rose-500">*</span></label>
-                <input type="text" name="author" value={formData.author} onChange={handleChange} className={`w-full rounded-md shadow-sm sm:text-sm p-2 border ${errors.author ? 'border-rose-300 focus:ring-rose-500' : 'border-slate-300 focus:ring-indigo-500'}`} />
+                <select 
+                  name="author" 
+                  value={formData.author ?? ''} 
+                  onChange={handleChange} 
+                  className={`w-full rounded-md shadow-sm sm:text-sm p-2 border ${errors.author ? 'border-rose-300 focus:ring-rose-500' : 'border-slate-300 focus:ring-indigo-500'}`}
+                >
+                  <option value="">Wybierz autora...</option>
+                  {employees.map(emp => (
+                    <option key={emp.id} value={`${emp.first_name} ${emp.last_name}`}>
+                      {emp.first_name} {emp.last_name}
+                    </option>
+                  ))}
+                </select>
                 {errors.author && <p className="mt-1 text-sm text-rose-500">{errors.author}</p>}
               </div>
             </div>
@@ -428,7 +481,7 @@ export default function KlifForm({ initialData, onSave, onCancel }: KlifFormProp
 
               <div className="md:col-span-2">
                 <label className="block text-sm font-medium text-slate-700 mb-1">MBCO (Minimum Business Continuity Objective)</label>
-                <textarea name="mbco_description" value={formData.mbco_description} onChange={handleChange} rows={3} className="w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border" placeholder="Opis minimalnego poziomu działania..." />
+                <textarea name="mbco_description" value={formData.mbco_description ?? ''} onChange={handleChange} rows={3} className="w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border" placeholder="Opis minimalnego poziomu działania..." />
               </div>
             </div>
           </div>
@@ -451,8 +504,8 @@ export default function KlifForm({ initialData, onSave, onCancel }: KlifFormProp
                 {formData.processes.map((p) => (
                   <div key={p.id} className="flex gap-3 items-start bg-slate-50 p-3 rounded-lg border border-slate-200">
                     <div className="flex-1 space-y-3">
-                      <input type="text" placeholder="Nazwa procesu" value={p.name} onChange={(e) => updateProcess(p.id, 'name', e.target.value)} className="w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border" />
-                      <input type="text" placeholder="Opis" value={p.description} onChange={(e) => updateProcess(p.id, 'description', e.target.value)} className="w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border" />
+                      <input type="text" placeholder="Nazwa procesu" value={p.name ?? ''} onChange={(e) => updateProcess(p.id, 'name', e.target.value)} className="w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border" />
+                      <input type="text" placeholder="Opis" value={p.description ?? ''} onChange={(e) => updateProcess(p.id, 'description', e.target.value)} className="w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border" />
                     </div>
                     <button type="button" onClick={() => removeProcess(p.id)} className="text-rose-500 hover:text-rose-700 p-2"><Trash2 className="h-4 w-4" /></button>
                   </div>
@@ -497,8 +550,8 @@ export default function KlifForm({ initialData, onSave, onCancel }: KlifFormProp
                         <option key={asset.id} value={asset.id}>{asset.name}</option>
                       ))}
                     </select>
-                    <input type="text" placeholder="ID z Rejestru" title="ID z Rejestru Zasobów ICT" value={a.asset_id} readOnly className="w-full sm:w-1/4 rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border font-mono text-xs bg-slate-100" />
-                    <input type="text" placeholder="Typ" value={a.asset_type} readOnly className="w-full sm:w-1/4 rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border bg-slate-100" />
+                    <input type="text" placeholder="ID z Rejestru" title="ID z Rejestru Zasobów ICT" value={a.asset_id ?? ''} readOnly className="w-full sm:w-1/4 rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border font-mono text-xs bg-slate-100" />
+                    <input type="text" placeholder="Typ" value={a.asset_type ?? ''} readOnly className="w-full sm:w-1/4 rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border bg-slate-100" />
                     <label className="flex items-center whitespace-nowrap text-sm text-slate-700">
                       <input type="checkbox" checked={a.is_spof} onChange={(e) => updateAsset(a.id, 'is_spof', e.target.checked)} className="mr-2 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-slate-300 rounded" />
                       SPOF
@@ -529,7 +582,7 @@ export default function KlifForm({ initialData, onSave, onCancel }: KlifFormProp
                   <div className="lg:col-span-2">
                     <label className="block text-xs font-medium text-slate-700 mb-1">Nazwa dostawcy</label>
                     <select
-                      value={p.name}
+                      value={p.name ?? ''}
                       onChange={(e) => {
                         updateProvider(p.id, 'name', e.target.value);
                         updateProvider(p.id, 'service_type', '');
@@ -545,7 +598,7 @@ export default function KlifForm({ initialData, onSave, onCancel }: KlifFormProp
                   <div className="lg:col-span-2">
                     <label className="block text-xs font-medium text-slate-700 mb-1">Rodzaj postanowienia</label>
                     <select
-                      value={p.service_type}
+                      value={p.service_type ?? ''}
                       onChange={(e) => updateProvider(p.id, 'service_type', e.target.value)}
                       className="w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border"
                       disabled={!p.name}
@@ -558,7 +611,7 @@ export default function KlifForm({ initialData, onSave, onCancel }: KlifFormProp
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-slate-700 mb-1">Ryzyko koncentracji</label>
-                    <select value={p.concentration_risk} onChange={(e) => updateProvider(p.id, 'concentration_risk', e.target.value)} className="w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border">
+                    <select value={p.concentration_risk ?? ''} onChange={(e) => updateProvider(p.id, 'concentration_risk', e.target.value)} className="w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border">
                       <option value="">Wybierz...</option>
                       <option value="Niskie">Niskie</option>
                       <option value="Średnie">Średnie</option>
@@ -599,9 +652,9 @@ export default function KlifForm({ initialData, onSave, onCancel }: KlifFormProp
             <div className="space-y-3">
               {formData.dependencies.map((d) => (
                 <div key={d.id} className="flex flex-col sm:flex-row gap-3 items-start sm:items-center bg-slate-50 p-3 rounded-lg border border-slate-200">
-                  <input type="text" placeholder="ID KLIF" value={d.dependency_klif_id} onChange={(e) => updateDependency(d.id, 'dependency_klif_id', e.target.value)} className="w-full sm:w-1/4 rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border font-mono text-xs" />
-                  <input type="text" placeholder="Nazwa KLIF" value={d.dependency_klif_name} onChange={(e) => updateDependency(d.id, 'dependency_klif_name', e.target.value)} className="w-full sm:w-1/3 rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border" />
-                  <select value={d.dependency_type} onChange={(e) => updateDependency(d.id, 'dependency_type', e.target.value)} className="w-full sm:w-1/3 rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border">
+                  <input type="text" placeholder="ID KLIF" value={d.dependency_klif_id ?? ''} onChange={(e) => updateDependency(d.id, 'dependency_klif_id', e.target.value)} className="w-full sm:w-1/4 rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border font-mono text-xs" />
+                  <input type="text" placeholder="Nazwa KLIF" value={d.dependency_klif_name ?? ''} onChange={(e) => updateDependency(d.id, 'dependency_klif_name', e.target.value)} className="w-full sm:w-1/3 rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border" />
+                  <select value={d.dependency_type ?? ''} onChange={(e) => updateDependency(d.id, 'dependency_type', e.target.value)} className="w-full sm:w-1/3 rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border">
                     <option value="">Typ zależności...</option>
                     <option value="Wymaga">Wymaga (zależy od)</option>
                     <option value="Wspiera">Wspiera (jest wymagana przez)</option>
@@ -644,13 +697,13 @@ export default function KlifForm({ initialData, onSave, onCancel }: KlifFormProp
               {formData.drp_status && (
                 <div className="md:col-span-2">
                   <label className="block text-sm font-medium text-slate-700 mb-1">Opis DRP / Link do dokumentu</label>
-                  <input type="text" name="drp_description" value={formData.drp_description} onChange={handleChange} className="w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border" />
+                  <input type="text" name="drp_description" value={formData.drp_description ?? ''} onChange={handleChange} className="w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border" />
                 </div>
               )}
 
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Redundancja</label>
-                <select name="redundancy" value={formData.redundancy} onChange={handleChange} className="w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border">
+                <select name="redundancy" value={formData.redundancy ?? ''} onChange={handleChange} className="w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border">
                   <option value="">Wybierz...</option>
                   <option value="Pełna">Pełna (Active-Active)</option>
                   <option value="Częściowa">Częściowa (Active-Passive)</option>
@@ -660,7 +713,7 @@ export default function KlifForm({ initialData, onSave, onCancel }: KlifFormProp
 
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Częstotliwość testów</label>
-                <select name="testing_frequency" value={formData.testing_frequency} onChange={handleChange} className="w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border">
+                <select name="testing_frequency" value={formData.testing_frequency ?? ''} onChange={handleChange} className="w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border">
                   <option value="">Wybierz...</option>
                   <option value="Kwartalnie">Kwartalnie</option>
                   <option value="Półrocznie">Półrocznie</option>
@@ -691,7 +744,7 @@ export default function KlifForm({ initialData, onSave, onCancel }: KlifFormProp
 
               <div className="md:col-span-2">
                 <label className="block text-sm font-medium text-slate-700 mb-1">Uwagi dodatkowe</label>
-                <textarea name="notes" value={formData.notes} onChange={handleChange} rows={3} className="w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border" />
+                <textarea name="notes" value={formData.notes ?? ''} onChange={handleChange} rows={3} className="w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border" />
               </div>
             </div>
           </div>

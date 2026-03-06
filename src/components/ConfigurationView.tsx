@@ -3,168 +3,299 @@ import { Database, Key, Link as LinkIcon, CheckCircle2, Copy, BookOpen, Save } f
 import { initSupabase, getSupabase } from '../lib/supabase';
 
 export const SQL_SCRIPT = `
--- 1. Tworzenie tabeli dla zasobów ICT
+-- Enable UUID extension
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+-- 1. Departments Table
+CREATE TABLE IF NOT EXISTS departments (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    name TEXT NOT NULL,
+    description TEXT,
+    manager_id UUID,
+    is_critical_unit BOOLEAN DEFAULT FALSE,
+    recovery_time_objective TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 2. Employees Table
+CREATE TABLE IF NOT EXISTS employees (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    first_name TEXT NOT NULL,
+    last_name TEXT NOT NULL,
+    email TEXT,
+    position TEXT,
+    department_id UUID REFERENCES departments(id) ON DELETE SET NULL,
+    security_role TEXT,
+    is_key_personnel BOOLEAN DEFAULT FALSE,
+    last_security_training_date DATE,
+    background_check_status TEXT,
+    employment_type TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 3. ICT Assets Table (JSONB based)
 CREATE TABLE IF NOT EXISTS ict_assets (
-  id UUID PRIMARY KEY,
-  data JSONB NOT NULL,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    data JSONB NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 2. Tworzenie tabeli dla ryzyk
+-- 4. Risks Table (JSONB based)
 CREATE TABLE IF NOT EXISTS risks (
-  id TEXT PRIMARY KEY,
-  data JSONB NOT NULL,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    data JSONB NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 3. Tworzenie tabel dla KLIF
+-- 5. Providers Table (Column based)
+CREATE TABLE IF NOT EXISTS dostawcy_ict (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    autor_wpisu TEXT,
+    nazwa_prawna TEXT NOT NULL,
+    lei TEXT,
+    nip TEXT,
+    kraj_rejestracji TEXT,
+    adres_siedziby TEXT,
+    typ_dostawcy TEXT,
+    czy_grupa_kapitalowa BOOLEAN DEFAULT FALSE,
+    nazwa_jednostki_dominujacej TEXT,
+    lei_jednostki_dominujacej TEXT,
+    czy_kluczowy_dostawca_esa BOOLEAN DEFAULT FALSE,
+    numer_referencyjny_umowy TEXT,
+    data_zawarcia_umowy DATE,
+    data_wygasniecia_umowy DATE,
+    opcje_przedluzenia BOOLEAN DEFAULT FALSE,
+    opcje_przedluzenia_opis TEXT,
+    waluta TEXT,
+    wartosc_kontraktu NUMERIC,
+    prawo_wlasciwe TEXT,
+    jurysdykcja_sadu TEXT,
+    klauzula_prawo_audytu BOOLEAN DEFAULT FALSE,
+    klauzula_prawo_wypowiedzenia BOOLEAN DEFAULT FALSE,
+    klauzula_raportowanie_incydentow BOOLEAN DEFAULT FALSE,
+    klauzula_sla BOOLEAN DEFAULT FALSE,
+    klauzula_bcp_dostawcy BOOLEAN DEFAULT FALSE,
+    klauzula_zmiany_podwykonawcow BOOLEAN DEFAULT FALSE,
+    kraje_przetwarzania TEXT[],
+    kraje_przechowywania TEXT[],
+    czy_poza_eog BOOLEAN DEFAULT FALSE,
+    uzasadnienie_poza_eog TEXT,
+    typy_danych TEXT[],
+    model_wdrozenia TEXT,
+    ryzyko_koncentracji TEXT,
+    zastepowanosc TEXT,
+    alternatywni_dostawcy TEXT,
+    ocena_ryzyka_wartosc NUMERIC,
+    ocena_ryzyka_uzasadnienie TEXT,
+    wplyw_poufnosc TEXT,
+    wplyw_integralnosc TEXT,
+    wplyw_dostepnosc TEXT,
+    data_ostatniej_oceny DATE,
+    data_kolejnego_przegladu DATE,
+    rto_wartosc NUMERIC,
+    rto_jednostka TEXT,
+    rpo_wartosc NUMERIC,
+    rpo_jednostka TEXT,
+    czy_certyfikowany_bcp BOOLEAN DEFAULT FALSE,
+    bcp_certyfikat TEXT,
+    exit_plan_okres_wypowiedzenia NUMERIC,
+    exit_plan_opis_migracji TEXT,
+    exit_plan_ryzyko_danych TEXT,
+    exit_plan_czas_migracji_dni NUMERIC,
+    prawo_audytu_status BOOLEAN DEFAULT FALSE,
+    data_ostatniego_audytu DATE,
+    wynik_audytu TEXT,
+    data_ostatniego_przegladu DATE,
+    uwagi TEXT
+);
+
+-- 6. KLIF Table (Column based)
 CREATE TABLE IF NOT EXISTS klif (
-  id UUID PRIMARY KEY,
-  name TEXT,
-  classification_type TEXT,
-  classification_justification TEXT,
-  owner TEXT,
-  owner_unit TEXT,
-  classification_methodology TEXT,
-  author TEXT,
-  financial_impact TEXT,
-  regulatory_impact TEXT,
-  operational_impact TEXT,
-  reputational_impact TEXT,
-  rto_value NUMERIC,
-  rto_unit TEXT,
-  mtpd_value NUMERIC,
-  mtpd_unit TEXT,
-  mbco_description TEXT,
-  drp_status BOOLEAN,
-  drp_description TEXT,
-  exit_plan_status BOOLEAN,
-  redundancy TEXT,
-  testing_frequency TEXT,
-  last_test_date DATE,
-  test_result TEXT,
-  last_review_date DATE,
-  notes TEXT,
-  created_at TIMESTAMPTZ DEFAULT NOW()
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    name TEXT NOT NULL,
+    classification_type TEXT,
+    classification_justification TEXT,
+    owner TEXT,
+    owner_unit TEXT,
+    classification_methodology TEXT,
+    author TEXT,
+    financial_impact TEXT,
+    regulatory_impact TEXT,
+    operational_impact TEXT,
+    reputational_impact TEXT,
+    rto_value NUMERIC,
+    rto_unit TEXT,
+    mtpd_value NUMERIC,
+    mtpd_unit TEXT,
+    mbco_description TEXT,
+    drp_status BOOLEAN DEFAULT FALSE,
+    drp_description TEXT,
+    exit_plan_status BOOLEAN DEFAULT FALSE,
+    redundancy TEXT,
+    testing_frequency TEXT,
+    last_test_date DATE,
+    test_result TEXT,
+    last_review_date DATE,
+    notes TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- 7. KLIF Relations
 CREATE TABLE IF NOT EXISTS klif_procesy (
-  id UUID PRIMARY KEY,
-  klif_id UUID REFERENCES klif(id) ON DELETE CASCADE,
-  name TEXT,
-  description TEXT
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    klif_id UUID REFERENCES klif(id) ON DELETE CASCADE,
+    name TEXT,
+    description TEXT
 );
 
 CREATE TABLE IF NOT EXISTS klif_zasoby_ict (
-  id UUID PRIMARY KEY,
-  klif_id UUID REFERENCES klif(id) ON DELETE CASCADE,
-  asset_id TEXT,
-  asset_name TEXT,
-  asset_type TEXT,
-  is_spof BOOLEAN
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    klif_id UUID REFERENCES klif(id) ON DELETE CASCADE,
+    asset_id UUID,
+    asset_name TEXT,
+    asset_type TEXT,
+    is_spof BOOLEAN DEFAULT FALSE
 );
 
 CREATE TABLE IF NOT EXISTS klif_dostawcy (
-  id UUID PRIMARY KEY,
-  klif_id UUID REFERENCES klif(id) ON DELETE CASCADE,
-  name TEXT,
-  service_type TEXT,
-  concentration_risk TEXT,
-  is_klif_contract BOOLEAN,
-  is_subcontractor BOOLEAN
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    klif_id UUID REFERENCES klif(id) ON DELETE CASCADE,
+    name TEXT,
+    service_type TEXT,
+    concentration_risk TEXT,
+    is_klif_contract BOOLEAN DEFAULT FALSE,
+    is_subcontractor BOOLEAN DEFAULT FALSE
 );
 
 CREATE TABLE IF NOT EXISTS klif_zaleznosci (
-  id UUID PRIMARY KEY,
-  klif_id UUID REFERENCES klif(id) ON DELETE CASCADE,
-  dependency_klif_id TEXT,
-  dependency_klif_name TEXT,
-  dependency_type TEXT
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    klif_id UUID REFERENCES klif(id) ON DELETE CASCADE,
+    dependency_klif_id UUID,
+    dependency_klif_name TEXT,
+    dependency_type TEXT
 );
 
--- 4. Wyłączenie RLS (Row Level Security) dla ułatwienia testów
--- UWAGA: W środowisku produkcyjnym należy włączyć RLS i skonfigurować polityki!
-ALTER TABLE ict_assets DISABLE ROW LEVEL SECURITY;
-ALTER TABLE risks DISABLE ROW LEVEL SECURITY;
-ALTER TABLE klif DISABLE ROW LEVEL SECURITY;
-ALTER TABLE klif_procesy DISABLE ROW LEVEL SECURITY;
-ALTER TABLE klif_zasoby_ict DISABLE ROW LEVEL SECURITY;
-ALTER TABLE klif_dostawcy DISABLE ROW LEVEL SECURITY;
-ALTER TABLE klif_zaleznosci DISABLE ROW LEVEL SECURITY;
-
--- 5. Tworzenie tabeli dla dostawców ICT
-CREATE TABLE IF NOT EXISTS dostawcy_ict (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW(),
-  autor_wpisu TEXT NOT NULL,
-  nazwa_prawna TEXT NOT NULL,
-  lei TEXT NOT NULL UNIQUE,
-  nip TEXT,
-  kraj_rejestracji CHAR(2) NOT NULL,
-  adres_siedziby TEXT,
-  typ_dostawcy TEXT CHECK (typ_dostawcy IN ('Zewnętrzny','Wewnątrzgrupowy')) NOT NULL,
-  czy_grupa_kapitalowa BOOLEAN DEFAULT FALSE,
-  nazwa_jednostki_dominujacej TEXT,
-  lei_jednostki_dominujacej TEXT,
-  czy_kluczowy_dostawca_esa BOOLEAN DEFAULT FALSE,
-  numer_referencyjny_umowy TEXT NOT NULL UNIQUE,
-  data_zawarcia_umowy DATE NOT NULL,
-  data_wygasniecia_umowy DATE,
-  opcje_przedluzenia BOOLEAN DEFAULT FALSE,
-  opcje_przedluzenia_opis TEXT,
-  waluta CHAR(3),
-  wartosc_kontraktu NUMERIC,
-  prawo_wlasciwe TEXT,
-  jurysdykcja_sadu TEXT,
-  klauzula_prawo_audytu BOOLEAN DEFAULT FALSE,
-  klauzula_prawo_wypowiedzenia BOOLEAN DEFAULT FALSE,
-  klauzula_raportowanie_incydentow BOOLEAN DEFAULT FALSE,
-  klauzula_sla BOOLEAN DEFAULT FALSE,
-  klauzula_bcp_dostawcy BOOLEAN DEFAULT FALSE,
-  klauzula_zmiany_podwykonawcow BOOLEAN DEFAULT FALSE,
-  zakres_umowy JSONB DEFAULT '[]'::jsonb,
-  kraje_przetwarzania TEXT[],
-  kraje_przechowywania TEXT[],
-  czy_poza_eog BOOLEAN DEFAULT FALSE,
-  uzasadnienie_poza_eog TEXT,
-  typy_danych TEXT[],
-  model_wdrozenia TEXT CHECK (model_wdrozenia IN ('Chmura publiczna', 'Chmura prywatna', 'Chmura hybrydowa', 'On-premise', 'Mieszany')),
-  ryzyko_koncentracji TEXT CHECK (ryzyko_koncentracji IN ('Niskie', 'Średnie', 'Wysokie')),
-  zastepowanosc TEXT CHECK (zastepowanosc IN ('Łatwa', 'Trudna', 'Niemożliwa')),
-  alternatywni_dostawcy TEXT,
-  ocena_ryzyka_wartosc NUMERIC,
-  ocena_ryzyka_uzasadnienie TEXT,
-  wplyw_poufnosc TEXT CHECK (wplyw_poufnosc IN ('Niski', 'Średni', 'Wysoki', 'Krytyczny')),
-  wplyw_integralnosc TEXT CHECK (wplyw_integralnosc IN ('Niski', 'Średni', 'Wysoki', 'Krytyczny')),
-  wplyw_dostepnosc TEXT CHECK (wplyw_dostepnosc IN ('Niski', 'Średni', 'Wysoki', 'Krytyczny')),
-  data_ostatniej_oceny DATE,
-  data_kolejnego_przegladu DATE,
-  rto_wartosc INTEGER,
-  rto_jednostka TEXT CHECK (rto_jednostka IN ('minuty', 'godziny', 'dni')),
-  rpo_wartosc INTEGER,
-  rpo_jednostka TEXT CHECK (rpo_jednostka IN ('minuty', 'godziny', 'dni')),
-  czy_certyfikowany_bcp BOOLEAN DEFAULT FALSE,
-  bcp_certyfikat TEXT,
-  exit_plan_okres_wypowiedzenia INTEGER,
-  exit_plan_opis_migracji TEXT,
-  exit_plan_ryzyko_danych TEXT,
-  exit_plan_czas_migracji_dni INTEGER,
-  prawo_audytu_status BOOLEAN DEFAULT FALSE,
-  data_ostatniego_audytu DATE,
-  wynik_audytu TEXT CHECK (wynik_audytu IN ('Pozytywny', 'Z zastrzeżeniami', 'Negatywny')),
-  data_ostatniego_przegladu DATE,
-  uwagi TEXT
+-- 8. Incidents Table (JSONB based relations)
+CREATE TABLE IF NOT EXISTS incidents (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    title TEXT NOT NULL,
+    description TEXT,
+    status TEXT, -- 'Rejestracja', 'Analiza', 'Mitygacja', 'Zamknięty'
+    severity TEXT, -- 'Niski', 'Średni', 'Wysoki', 'Krytyczny'
+    is_major_incident BOOLEAN DEFAULT FALSE, -- DORA definition
+    
+    -- Dates
+    detection_date TIMESTAMPTZ,
+    occurrence_date TIMESTAMPTZ,
+    resolution_date TIMESTAMPTZ,
+    duration_minutes INTEGER,
+    
+    -- DORA Classification Criteria
+    affected_clients_count INTEGER,
+    affected_clients_percent NUMERIC,
+    data_loss_type TEXT, -- 'Brak', 'Poufność', 'Integralność', 'Dostępność', 'Wiele'
+    financial_impact_value NUMERIC,
+    reputational_impact TEXT, -- 'Brak', 'Niski', 'Średni', 'Wysoki'
+    geographic_spread TEXT, -- 'Lokalny', 'Krajowy', 'Transgraniczny (UE)', 'Globalny'
+    
+    -- Relations (stored as JSONB arrays of objects {id, name})
+    related_assets JSONB DEFAULT '[]'::jsonb,
+    related_providers JSONB DEFAULT '[]'::jsonb,
+    related_klifs JSONB DEFAULT '[]'::jsonb,
+    
+    -- ISO 27001 & RCA
+    root_cause_category TEXT,
+    root_cause_description TEXT,
+    actions_taken TEXT,
+    lessons_learned TEXT,
+    
+    -- Reporting
+    reported_to_knf BOOLEAN DEFAULT FALSE,
+    reported_to_csirt BOOLEAN DEFAULT FALSE,
+    reporting_date TIMESTAMPTZ,
+    
+    -- Assignment & Tracking
+    assigned_to TEXT,
+    involved_persons TEXT[],
+    audit_log JSONB DEFAULT '[]'::jsonb,
+    
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    author TEXT
 );
-ALTER TABLE dostawcy_ict DISABLE ROW LEVEL SECURITY;
 
--- 6. Aktualizacja schematu (jeśli tabela już istnieje)
-DO $$
-BEGIN
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'dostawcy_ict' AND column_name = 'zakres_umowy') THEN
-        ALTER TABLE dostawcy_ict ADD COLUMN zakres_umowy JSONB DEFAULT '[]'::jsonb;
+-- RLS Policies (Simplified for dev)
+ALTER TABLE departments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE employees ENABLE ROW LEVEL SECURITY;
+ALTER TABLE ict_assets ENABLE ROW LEVEL SECURITY;
+ALTER TABLE risks ENABLE ROW LEVEL SECURITY;
+ALTER TABLE dostawcy_ict ENABLE ROW LEVEL SECURITY;
+ALTER TABLE klif ENABLE ROW LEVEL SECURITY;
+ALTER TABLE klif_procesy ENABLE ROW LEVEL SECURITY;
+ALTER TABLE klif_zasoby_ict ENABLE ROW LEVEL SECURITY;
+ALTER TABLE klif_dostawcy ENABLE ROW LEVEL SECURITY;
+ALTER TABLE klif_zaleznosci ENABLE ROW LEVEL SECURITY;
+ALTER TABLE incidents ENABLE ROW LEVEL SECURITY;
+
+DO $$ 
+BEGIN 
+    -- Departments policies
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'departments' AND policyname = 'Public Access') THEN
+        CREATE POLICY "Public Access" ON departments FOR ALL USING (true) WITH CHECK (true);
+    END IF;
+
+    -- Employees policies
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'employees' AND policyname = 'Public Access') THEN
+        CREATE POLICY "Public Access" ON employees FOR ALL USING (true) WITH CHECK (true);
+    END IF;
+
+    -- ICT Assets policies
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'ict_assets' AND policyname = 'Public Access') THEN
+        CREATE POLICY "Public Access" ON ict_assets FOR ALL USING (true) WITH CHECK (true);
+    END IF;
+
+    -- Risks policies
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'risks' AND policyname = 'Public Access') THEN
+        CREATE POLICY "Public Access" ON risks FOR ALL USING (true) WITH CHECK (true);
+    END IF;
+
+    -- Providers policies
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'dostawcy_ict' AND policyname = 'Public Access') THEN
+        CREATE POLICY "Public Access" ON dostawcy_ict FOR ALL USING (true) WITH CHECK (true);
+    END IF;
+
+    -- KLIF policies
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'klif' AND policyname = 'Public Access') THEN
+        CREATE POLICY "Public Access" ON klif FOR ALL USING (true) WITH CHECK (true);
+    END IF;
+
+    -- KLIF Relations policies
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'klif_procesy' AND policyname = 'Public Access') THEN
+        CREATE POLICY "Public Access" ON klif_procesy FOR ALL USING (true) WITH CHECK (true);
+    END IF;
+    
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'klif_zasoby_ict' AND policyname = 'Public Access') THEN
+        CREATE POLICY "Public Access" ON klif_zasoby_ict FOR ALL USING (true) WITH CHECK (true);
+    END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'klif_dostawcy' AND policyname = 'Public Access') THEN
+        CREATE POLICY "Public Access" ON klif_dostawcy FOR ALL USING (true) WITH CHECK (true);
+    END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'klif_zaleznosci' AND policyname = 'Public Access') THEN
+        CREATE POLICY "Public Access" ON klif_zaleznosci FOR ALL USING (true) WITH CHECK (true);
+    END IF;
+
+    -- Incidents policies
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'incidents' AND policyname = 'Public Access') THEN
+        CREATE POLICY "Public Access" ON incidents FOR ALL USING (true) WITH CHECK (true);
     END IF;
 END $$;
 `;

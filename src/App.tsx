@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from "react";
-import { Shield, LayoutDashboard, List, Plus, Server, LogOut, Activity, Settings, Users } from "lucide-react";
+import { Shield, LayoutDashboard, List, Plus, Server, LogOut, Activity, Settings, Users, AlertTriangle } from "lucide-react";
 import { RiskEntry, IctAsset } from "./types";
 import { INITIAL_RISKS } from "./constants";
 import Dashboard from "./components/Dashboard";
@@ -15,12 +15,14 @@ import IctAssetTable from "./components/IctAssetTable";
 import KlifView from "./components/KlifView";
 import ConfigurationView from "./components/ConfigurationView";
 import ProvidersView from "./components/ProvidersView";
+import EmployeesView from "./components/EmployeesView";
+import IncidentsView from "./components/IncidentsView";
 import SetupScreen from "./components/SetupScreen";
 import { getSupabase, clearSupabaseConfig } from "./lib/supabase";
 
 export default function App() {
   const [isConfigured, setIsConfigured] = useState<boolean>(!!getSupabase());
-  const [activeTab, setActiveTab] = useState<"dashboard" | "register" | "assets" | "klif" | "config" | "providers">(
+  const [activeTab, setActiveTab] = useState<"dashboard" | "register" | "assets" | "klif" | "config" | "providers" | "employees" | "incidents">(
     "dashboard",
   );
   const [risks, setRisks] = useState<RiskEntry[]>([]);
@@ -254,6 +256,17 @@ export default function App() {
                 KLIF
               </button>
               <button
+                onClick={() => setActiveTab("employees")}
+                className={`flex items-center px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                  activeTab === "employees"
+                    ? "bg-slate-800 text-white"
+                    : "text-slate-300 hover:bg-slate-800 hover:text-white"
+                }`}
+              >
+                <Users className="h-4 w-4 mr-2 hidden sm:block" />
+                Pracownicy
+              </button>
+              <button
                 onClick={() => setActiveTab("providers")}
                 className={`flex items-center px-3 py-2 rounded-md text-sm font-medium transition-colors ${
                   activeTab === "providers"
@@ -263,6 +276,17 @@ export default function App() {
               >
                 <Users className="h-4 w-4 mr-2 hidden sm:block" />
                 Dostawcy
+              </button>
+              <button
+                onClick={() => setActiveTab("incidents")}
+                className={`flex items-center px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                  activeTab === "incidents"
+                    ? "bg-slate-800 text-white"
+                    : "text-slate-300 hover:bg-slate-800 hover:text-white"
+                }`}
+              >
+                <AlertTriangle className="h-4 w-4 mr-2 hidden sm:block" />
+                Incydenty
               </button>
               <button
                 onClick={() => setActiveTab("config")}
@@ -291,6 +315,7 @@ export default function App() {
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {activeTab === "dashboard" && <Dashboard risks={risks} />}
+        {activeTab === "incidents" && <IncidentsView />}
 
         {activeTab === "register" && (
           <div className="space-y-6">
@@ -348,6 +373,7 @@ export default function App() {
         )}
 
         {activeTab === "klif" && <KlifView />}
+        {activeTab === "employees" && <EmployeesView />}
         {activeTab === "config" && <ConfigurationView />}
         {activeTab === "providers" && <ProvidersView />}
       </main>

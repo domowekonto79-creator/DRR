@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { getSupabase } from '../lib/supabase';
-import { DostawcaICT, ZakresUmowy } from '../types';
+import { DostawcaICT, ZakresUmowy, IctAsset } from '../types';
 import { Save, X, AlertCircle, Plus, Trash2, Loader2, Edit2 } from 'lucide-react';
 
 interface ProviderFormProps {
@@ -33,6 +33,8 @@ const SERVICE_CATEGORIES = [
   { code: 'S19', name: 'Usługi w chmurze: SaaS' },
 ];
 
+const POPULAR_CURRENCIES = ['PLN', 'EUR', 'USD', 'GBP', 'CHF', 'JPY', 'CNY', 'AUD', 'CAD', 'SEK'];
+
 const ProviderForm: React.FC<ProviderFormProps> = ({ provider, onSave, onCancel }) => {
   const [step, setStep] = useState(1);
   const [formData, setFormData] = useState<Partial<DostawcaICT>>({});
@@ -42,6 +44,53 @@ const ProviderForm: React.FC<ProviderFormProps> = ({ provider, onSave, onCancel 
   const [leiStatusAlert, setLeiStatusAlert] = useState<string | null>(null);
   const [isNameLocked, setIsNameLocked] = useState(false);
   const [loadingNameSearch, setLoadingNameSearch] = useState(false);
+  const [availableCurrencies, setAvailableCurrencies] = useState<string[]>(POPULAR_CURRENCIES);
+  const [availableAssets, setAvailableAssets] = useState<IctAsset[]>([]);
+  const [relatedIncidents, setRelatedIncidents] = useState<{ id: string, title: string, severity: string, status: string, created_at: string }[]>([]);
+
+  useEffect(() => {
+    const fetchAssets = async () => {
+      const supabase = getSupabase();
+      if (!supabase) return;
+      const { data, error } = await supabase.from('ict_assets').select('data');
+      if (data) {
+        setAvailableAssets(data.map((row: any) => row.data as IctAsset));
+      }
+
+      // Fetch related incidents
+      if (provider?.id) {
+        const { data: incidentsData } = await supabase
+          .from('incidents')
+          .select('id, title, severity, status, created_at, related_providers');
+        
+        if (incidentsData) {
+          const providerIncidents = incidentsData.filter((inc: any) => 
+            inc.related_providers && Array.isArray(inc.related_providers) && 
+            inc.related_providers.some((prov: any) => prov.id === provider.id)
+          );
+          setRelatedIncidents(providerIncidents);
+        }
+      }
+    };
+    fetchAssets();
+  }, [provider]);
+
+  useEffect(() => {
+    if (provider?.waluta && !POPULAR_CURRENCIES.includes(provider.waluta)) {
+      setAvailableCurrencies(prev => [...prev, provider.waluta!]);
+    }
+  }, [provider]);
+
+  const handleAddCurrency = () => {
+    const newCurrency = prompt("Podaj kod waluty (np. NOK):");
+    if (newCurrency) {
+      const upperCurrency = newCurrency.toUpperCase();
+      if (!availableCurrencies.includes(upperCurrency)) {
+        setAvailableCurrencies(prev => [...prev, upperCurrency]);
+      }
+      setFormData(prev => ({ ...prev, waluta: upperCurrency }));
+    }
+  };
 
   const fetchParentData = async (lei: string) => {
     try {
@@ -459,8 +508,28 @@ const ProviderForm: React.FC<ProviderFormProps> = ({ provider, onSave, onCancel 
               )}
 
               <div className="sm:col-span-2">
-                <label htmlFor="waluta" className="block text-sm font-medium text-gray-700">Waluta (kod 3-literowy)</label>
-                <input type="text" name="waluta" id="waluta" value={formData.waluta || ''} onChange={handleChange} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" maxLength={3} />
+                <label htmlFor="waluta" className="block text-sm font-medium text-gray-700">Waluta</label>
+                <div className="mt-1 flex rounded-md shadow-sm">
+                  <select
+                    name="waluta"
+                    id="waluta"
+                    value={formData.waluta || ''}
+                    onChange={handleChange}
+                    className="flex-1 rounded-none rounded-l-md border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                  >
+                    <option value="">Wybierz...</option>
+                    {availableCurrencies.map(curr => (
+                      <option key={curr} value={curr}>{curr}</option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={handleAddCurrency}
+                    className="-ml-px relative inline-flex items-center space-x-2 px-4 py-2 border border-gray-300 text-sm font-medium rounded-r-md text-gray-700 bg-gray-50 hover:bg-gray-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                  >
+                    <Plus className="h-4 w-4" />
+                  </button>
+                </div>
               </div>
 
               <div className="sm:col-span-2">
@@ -801,6 +870,61 @@ const ProviderForm: React.FC<ProviderFormProps> = ({ provider, onSave, onCancel 
               <div className="sm:col-span-6">
                 <label htmlFor="uwagi" className="block text-sm font-medium text-gray-700">Uwagi</label>
                 <textarea name="uwagi" id="uwagi" value={formData.uwagi || ''} onChange={handleChange} rows={4} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"></textarea>
+              </div>
+
+              <div className="sm:col-span-6 mt-6 pt-6 border-t border-gray-200">
+                <h4 className="text-md font-medium text-gray-800 mb-4">Powiązane zasoby ICT</h4>
+                {availableAssets.filter(asset => asset.providers.some(p => p.name === formData.nazwa_prawna)).length > 0 ? (
+                  <div className="bg-gray-50 rounded-md border border-gray-200 overflow-hidden">
+                    <ul className="divide-y divide-gray-200">
+                      {availableAssets
+                        .filter(asset => asset.providers.some(p => p.name === formData.nazwa_prawna))
+                        .map(asset => (
+                          <li key={asset.id} className="px-4 py-3 text-sm flex justify-between items-center hover:bg-gray-100 transition-colors">
+                            <div className="flex flex-col">
+                              <span className="font-medium text-gray-700">{asset.name}</span>
+                              <span className="text-xs text-gray-500">{asset.category}</span>
+                            </div>
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">
+                              {asset.criticality}
+                            </span>
+                          </li>
+                        ))
+                      }
+                    </ul>
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-500 italic bg-gray-50 p-4 rounded-md border border-gray-200">
+                    Brak zasobów ICT powiązanych z tym dostawcą.
+                  </p>
+                )}
+              </div>
+
+              {/* Related Incidents Section */}
+              <div className="sm:col-span-6 mt-6 pt-6 border-t border-gray-200">
+                <h4 className="text-md font-medium text-gray-800 mb-4">Powiązane Incydenty</h4>
+                {relatedIncidents.length > 0 ? (
+                  <div className="bg-gray-50 rounded-md border border-gray-200 overflow-hidden">
+                    <ul className="divide-y divide-gray-200">
+                      {relatedIncidents.map((inc) => (
+                        <li key={inc.id} className="px-4 py-3 flex items-center justify-between hover:bg-gray-100">
+                          <div className="flex items-center gap-2">
+                            <span className={`w-2 h-2 rounded-full ${inc.severity === 'Krytyczny' ? 'bg-rose-500' : inc.severity === 'Wysoki' ? 'bg-orange-500' : 'bg-emerald-500'}`}></span>
+                            <div>
+                              <p className="text-sm font-medium text-gray-900">{inc.title}</p>
+                              <p className="text-xs text-gray-500">{new Date(inc.created_at).toLocaleDateString()}</p>
+                            </div>
+                          </div>
+                          <span className="text-xs text-gray-500 bg-white px-2 py-0.5 rounded border border-gray-200">{inc.status}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-500 italic bg-gray-50 p-4 rounded-md border border-gray-200">
+                    Brak powiązanych incydentów.
+                  </p>
+                )}
               </div>
             </div>
           </div>

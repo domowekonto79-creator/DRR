@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { IctAsset, IctProvider, BusinessFunction, IctRisk, IctVulnerability, RelatedAsset, DostawcaICT } from '../types';
-import { Save, Download, Trash2, Plus, X, AlertCircle, CheckCircle } from 'lucide-react';
+import { IctAsset, IctProvider, BusinessFunction, IctRisk, IctVulnerability, RelatedAsset, DostawcaICT, Employee, Department } from '../types';
+import { Save, Download, Trash2, Plus, X, AlertCircle, CheckCircle, Shield } from 'lucide-react';
 import { getSupabase } from '../lib/supabase';
 
 const DEFAULT_ASSET: IctAsset = {
@@ -68,9 +68,13 @@ export default function IctAssetForm({ initialData, onSave, onCancel }: IctAsset
   );
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [availableKlifs, setAvailableKlifs] = useState<{ id: string, name: string }[]>([]);
-  const [availableRisks, setAvailableRisks] = useState<{ id: string, scenario: string, actionStatus: string }[]>([]);
+  const [availableRisks, setAvailableRisks] = useState<{ id: string, scenario: string, actionStatus: string, assetId?: string }[]>([]);
   const [availableProviders, setAvailableProviders] = useState<DostawcaICT[]>([]);
   const [availableAssets, setAvailableAssets] = useState<IctAsset[]>([]);
+  const [relatedKlifs, setRelatedKlifs] = useState<{ id: string, name: string, classification_type: string }[]>([]);
+  const [relatedIncidents, setRelatedIncidents] = useState<{ id: string, title: string, severity: string, status: string, created_at: string }[]>([]);
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [departments, setDepartments] = useState<Department[]>([]);
 
   const [currentStep, setCurrentStep] = useState(1);
   const totalSteps = 7;
@@ -94,11 +98,13 @@ export default function IctAssetForm({ initialData, onSave, onCancel }: IctAsset
         const supabase = getSupabase();
         if (!supabase) return;
         
-        const [klifsRes, risksRes, providersRes, assetsRes] = await Promise.all([
+        const [klifsRes, risksRes, providersRes, assetsRes, empsRes, deptsRes] = await Promise.all([
           supabase.from('klif').select('id, name').order('name'),
           supabase.from('risks').select('id, data'),
           supabase.from('dostawcy_ict').select('*'),
-          supabase.from('ict_assets').select('data')
+          supabase.from('ict_assets').select('data'),
+          supabase.from('employees').select('*'),
+          supabase.from('departments').select('*')
         ]);
         
         if (klifsRes.error) throw klifsRes.error;
@@ -109,14 +115,41 @@ export default function IctAssetForm({ initialData, onSave, onCancel }: IctAsset
         setAvailableKlifs(klifsRes.data || []);
         setAvailableProviders(providersRes.data as DostawcaICT[] || []);
         setAvailableAssets(assetsRes.data?.map((row: any) => row.data as IctAsset) || []);
+        setEmployees(empsRes.data || []);
+        setDepartments(deptsRes.data || []);
         
         const risksData = risksRes.data?.map(r => ({
           id: r.id,
           scenario: r.data.scenario,
-          actionStatus: r.data.actionStatus
+          actionStatus: r.data.actionStatus,
+          assetId: r.data.assetId
         })).sort((a, b) => a.scenario.localeCompare(b.scenario)) || [];
         
         setAvailableRisks(risksData);
+
+        if (initialData?.id) {
+             const { data: klifData } = await supabase
+               .from('klif_zasoby_ict')
+               .select('klif(id, name, classification_type)')
+               .eq('asset_id', initialData.id);
+             
+             if (klifData) {
+               setRelatedKlifs(klifData.map((k: any) => k.klif).filter(Boolean));
+             }
+
+             // Fetch related incidents
+             const { data: incidentsData } = await supabase
+               .from('incidents')
+               .select('id, title, severity, status, created_at, related_assets');
+             
+             if (incidentsData) {
+               const assetIncidents = incidentsData.filter((inc: any) => 
+                 inc.related_assets && Array.isArray(inc.related_assets) && 
+                 inc.related_assets.some((asset: any) => asset.id === initialData.id)
+               );
+               setRelatedIncidents(assetIncidents);
+             }
+        }
       } catch (err) {
         console.error('Error fetching data:', err);
       }
@@ -444,19 +477,19 @@ export default function IctAssetForm({ initialData, onSave, onCancel }: IctAsset
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">ID Zasobu</label>
-              <input type="text" name="id" value={formData.id} onChange={handleChange} className="w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border font-mono text-slate-500" />
+              <input type="text" name="id" value={formData.id ?? ''} onChange={handleChange} className="w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border font-mono text-slate-500" />
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">
                 Nazwa zasobu <span className="text-rose-500">*</span>
               </label>
-              <input type="text" name="name" value={formData.name} onChange={handleChange} className={`w-full rounded-md shadow-sm focus:ring-indigo-500 sm:text-sm p-2 border ${errors.name ? 'border-rose-500 focus:border-rose-500' : 'border-slate-300 focus:border-indigo-500'}`} />
+              <input type="text" name="name" value={formData.name ?? ''} onChange={handleChange} className={`w-full rounded-md shadow-sm focus:ring-indigo-500 sm:text-sm p-2 border ${errors.name ? 'border-rose-500 focus:border-rose-500' : 'border-slate-300 focus:border-indigo-500'}`} />
               {errors.name && <p className="mt-1 text-xs text-rose-500 flex items-center"><AlertCircle className="h-3 w-3 mr-1" />{errors.name}</p>}
             </div>
             
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Typ/kategoria zasobu</label>
-              <select name="category" value={formData.category} onChange={handleChange} className="w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border">
+              <select name="category" value={formData.category ?? ''} onChange={handleChange} className="w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border">
                 <option value="">Wybierz...</option>
                 <option value="Sprzęt">Sprzęt</option>
                 <option value="Oprogramowanie">Oprogramowanie</option>
@@ -468,7 +501,7 @@ export default function IctAssetForm({ initialData, onSave, onCancel }: IctAsset
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Status cyklu życia</label>
-              <select name="lifecycleStatus" value={formData.lifecycleStatus} onChange={handleChange} className="w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border">
+              <select name="lifecycleStatus" value={formData.lifecycleStatus ?? ''} onChange={handleChange} className="w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border">
                 <option value="">Wybierz...</option>
                 <option value="Nabycie">Nabycie</option>
                 <option value="Eksploatacja">Eksploatacja</option>
@@ -479,11 +512,11 @@ export default function IctAssetForm({ initialData, onSave, onCancel }: IctAsset
 
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Data wdrożenia</label>
-              <input type="date" name="deploymentDate" value={formData.deploymentDate} onChange={handleChange} className="w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border" />
+              <input type="date" name="deploymentDate" value={formData.deploymentDate ?? ''} onChange={handleChange} className="w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border" />
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Planowana data wycofania</label>
-              <input type="date" name="retirementDate" value={formData.retirementDate} onChange={handleChange} className="w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border" />
+              <input type="date" name="retirementDate" value={formData.retirementDate ?? ''} onChange={handleChange} className="w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border" />
             </div>
 
             <div className="md:col-span-2 bg-slate-50 p-4 rounded-lg border border-slate-200">
@@ -496,7 +529,7 @@ export default function IctAssetForm({ initialData, onSave, onCancel }: IctAsset
               {formData.isLegacy && (
                 <div className="mt-2 pl-6">
                   <label className="block text-sm font-medium text-slate-700 mb-1">Uzasadnienie utrzymania zasobu legacy</label>
-                  <textarea name="legacyJustification" value={formData.legacyJustification} onChange={handleChange} rows={2} className="w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border" placeholder="Dlaczego zasób jest nadal używany mimo statusu legacy?"></textarea>
+                  <textarea name="legacyJustification" value={formData.legacyJustification ?? ''} onChange={handleChange} rows={2} className="w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border" placeholder="Dlaczego zasób jest nadal używany mimo statusu legacy?"></textarea>
                 </div>
               )}
             </div>
@@ -513,21 +546,45 @@ export default function IctAssetForm({ initialData, onSave, onCancel }: IctAsset
               <label className="block text-sm font-medium text-slate-700 mb-1">
                 Właściciel zasobu <span className="text-rose-500">*</span>
               </label>
-              <input type="text" name="owner" value={formData.owner} onChange={handleChange} className={`w-full rounded-md shadow-sm focus:ring-indigo-500 sm:text-sm p-2 border ${errors.owner ? 'border-rose-500 focus:border-rose-500' : 'border-slate-300 focus:border-indigo-500'}`} />
+              <select 
+                name="owner" 
+                value={formData.owner ?? ''} 
+                onChange={handleChange} 
+                className={`w-full rounded-md shadow-sm focus:ring-indigo-500 sm:text-sm p-2 border ${errors.owner ? 'border-rose-500 focus:border-rose-500' : 'border-slate-300 focus:border-indigo-500'}`}
+              >
+                <option value="">Wybierz właściciela...</option>
+                {employees.map(emp => (
+                  <option key={emp.id} value={`${emp.first_name} ${emp.last_name}`}>
+                    {emp.first_name} {emp.last_name} ({emp.position})
+                  </option>
+                ))}
+              </select>
               {errors.owner && <p className="mt-1 text-xs text-rose-500 flex items-center"><AlertCircle className="h-3 w-3 mr-1" />{errors.owner}</p>}
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Jednostka organizacyjna właściciela</label>
-              <input type="text" name="ownerUnit" value={formData.ownerUnit} onChange={handleChange} className="w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border" />
+              <select 
+                name="ownerUnit" 
+                value={formData.ownerUnit ?? ''} 
+                onChange={handleChange} 
+                className="w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border"
+              >
+                <option value="">Wybierz jednostkę...</option>
+                {departments.map(dept => (
+                  <option key={dept.id} value={dept.name}>
+                    {dept.name}
+                  </option>
+                ))}
+              </select>
             </div>
 
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Lokalizacja fizyczna</label>
-              <input type="text" name="physicalLocation" value={formData.physicalLocation} onChange={handleChange} placeholder="np. Datacenter Warszawa, Rack A3" className="w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border" />
+              <input type="text" name="physicalLocation" value={formData.physicalLocation ?? ''} onChange={handleChange} placeholder="np. Datacenter Warszawa, Rack A3" className="w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border" />
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Lokalizacja logiczna</label>
-              <input type="text" name="logicalLocation" value={formData.logicalLocation} onChange={handleChange} placeholder="np. Chmura AWS eu-central-1" className="w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border" />
+              <input type="text" name="logicalLocation" value={formData.logicalLocation ?? ''} onChange={handleChange} placeholder="np. Chmura AWS eu-central-1" className="w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border" />
             </div>
 
             <div className="md:col-span-2">
@@ -643,7 +700,7 @@ export default function IctAssetForm({ initialData, onSave, onCancel }: IctAsset
 
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Uzasadnienie klasyfikacji</label>
-              <textarea name="criticalityJustification" value={formData.criticalityJustification} onChange={handleChange} rows={2} className="w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border" />
+              <textarea name="criticalityJustification" value={formData.criticalityJustification ?? ''} onChange={handleChange} rows={2} className="w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border" />
             </div>
 
             <div>
@@ -660,7 +717,7 @@ export default function IctAssetForm({ initialData, onSave, onCancel }: IctAsset
                   {formData.businessFunctions.map((func) => (
                     <div key={func.id} className="flex items-center gap-2 bg-slate-50 p-2 rounded-md border border-slate-200">
                       <select
-                        value={func.name}
+                        value={func.name ?? ''}
                         onChange={(e) => handleBusinessFunctionChange(func.id, e.target.value)}
                         className="flex-1 rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-1.5 border"
                       >
@@ -676,6 +733,42 @@ export default function IctAssetForm({ initialData, onSave, onCancel }: IctAsset
                   ))}
                 </div>
               )}
+              
+              <div className="mt-4 pt-4 border-t border-slate-200">
+                  <h5 className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-2">Powiązane procesy w Rejestrze KLIF</h5>
+                  {relatedKlifs.length > 0 ? (
+                    <ul className="space-y-2">
+                      {relatedKlifs.map((k) => (
+                        <li key={k.id} className="text-sm text-slate-700 flex items-center gap-2 bg-slate-50 p-2 rounded border border-slate-200">
+                          <span className={`w-2 h-2 rounded-full ${k.classification_type === 'Krytyczna' ? 'bg-rose-500' : k.classification_type === 'Istotna' ? 'bg-amber-500' : 'bg-emerald-500'}`}></span>
+                          <span className="font-medium">{k.name}</span>
+                          <span className="text-xs text-slate-500">({k.classification_type})</span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-sm text-slate-400 italic">Brak powiązań w Rejestrze KLIF.</p>
+                  )}
+              </div>
+
+              <div className="mt-4 pt-4 border-t border-slate-200">
+                  <h5 className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-2">Powiązane Incydenty</h5>
+                  {relatedIncidents.length > 0 ? (
+                    <ul className="space-y-2">
+                      {relatedIncidents.map((inc) => (
+                        <li key={inc.id} className="text-sm text-slate-700 flex items-center justify-between gap-2 bg-slate-50 p-2 rounded border border-slate-200">
+                          <div className="flex items-center gap-2">
+                            <span className={`w-2 h-2 rounded-full ${inc.severity === 'Krytyczny' ? 'bg-rose-500' : inc.severity === 'Wysoki' ? 'bg-orange-500' : 'bg-emerald-500'}`}></span>
+                            <span className="font-medium">{inc.title}</span>
+                          </div>
+                          <span className="text-xs text-slate-500 bg-white px-2 py-0.5 rounded border border-slate-200">{inc.status}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-sm text-slate-400 italic">Brak powiązanych incydentów.</p>
+                  )}
+              </div>
             </div>
           </div>
         </section>
@@ -690,11 +783,11 @@ export default function IctAssetForm({ initialData, onSave, onCancel }: IctAsset
             <div className="flex gap-2">
               <div className="flex-1">
                 <label className="block text-sm font-medium text-slate-700 mb-1">RTO (Recovery Time Objective)</label>
-                <input type="number" name="rtoValue" value={formData.rtoValue} onChange={handleChange} min="0" className="w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border" />
+                <input type="number" name="rtoValue" value={formData.rtoValue ?? ''} onChange={handleChange} min="0" className="w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border" />
               </div>
               <div className="w-1/3">
                 <label className="block text-sm font-medium text-slate-700 mb-1">&nbsp;</label>
-                <select name="rtoUnit" value={formData.rtoUnit} onChange={handleChange} className="w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border">
+                <select name="rtoUnit" value={formData.rtoUnit ?? 'godziny'} onChange={handleChange} className="w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border">
                   <option value="minuty">minuty</option>
                   <option value="godziny">godziny</option>
                   <option value="dni">dni</option>
@@ -705,11 +798,11 @@ export default function IctAssetForm({ initialData, onSave, onCancel }: IctAsset
             <div className="flex gap-2">
               <div className="flex-1">
                 <label className="block text-sm font-medium text-slate-700 mb-1">RPO (Recovery Point Objective)</label>
-                <input type="number" name="rpoValue" value={formData.rpoValue} onChange={handleChange} min="0" className="w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border" />
+                <input type="number" name="rpoValue" value={formData.rpoValue ?? ''} onChange={handleChange} min="0" className="w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border" />
               </div>
               <div className="w-1/3">
                 <label className="block text-sm font-medium text-slate-700 mb-1">&nbsp;</label>
-                <select name="rpoUnit" value={formData.rpoUnit} onChange={handleChange} className="w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border">
+                <select name="rpoUnit" value={formData.rpoUnit ?? 'godziny'} onChange={handleChange} className="w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border">
                   <option value="minuty">minuty</option>
                   <option value="godziny">godziny</option>
                   <option value="dni">dni</option>
@@ -720,7 +813,7 @@ export default function IctAssetForm({ initialData, onSave, onCancel }: IctAsset
             <div className="md:col-span-2 grid grid-cols-1 sm:grid-cols-3 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200">
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Wpływ na Poufność</label>
-                <select name="confidentialityImpact" value={formData.confidentialityImpact} onChange={handleChange} className="w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border">
+                <select name="confidentialityImpact" value={formData.confidentialityImpact ?? ''} onChange={handleChange} className="w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border">
                   <option value="">Wybierz...</option>
                   <option value="Niski">Niski</option>
                   <option value="Średni">Średni</option>
@@ -730,7 +823,7 @@ export default function IctAssetForm({ initialData, onSave, onCancel }: IctAsset
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Wpływ na Integralność</label>
-                <select name="integrityImpact" value={formData.integrityImpact} onChange={handleChange} className="w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border">
+                <select name="integrityImpact" value={formData.integrityImpact ?? ''} onChange={handleChange} className="w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border">
                   <option value="">Wybierz...</option>
                   <option value="Niski">Niski</option>
                   <option value="Średni">Średni</option>
@@ -740,7 +833,7 @@ export default function IctAssetForm({ initialData, onSave, onCancel }: IctAsset
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Wpływ na Dostępność</label>
-                <select name="availabilityImpact" value={formData.availabilityImpact} onChange={handleChange} className="w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border">
+                <select name="availabilityImpact" value={formData.availabilityImpact ?? ''} onChange={handleChange} className="w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border">
                   <option value="">Wybierz...</option>
                   <option value="Niski">Niski</option>
                   <option value="Średni">Średni</option>
@@ -764,7 +857,7 @@ export default function IctAssetForm({ initialData, onSave, onCancel }: IctAsset
                   {formData.risks.map((risk) => (
                     <div key={risk.id} className="flex items-center gap-2 bg-slate-50 p-2 rounded-md border border-slate-200">
                       <select
-                        value={risk.description}
+                        value={risk.description ?? ''}
                         onChange={(e) => {
                           const selectedRisk = availableRisks.find(r => r.scenario === e.target.value);
                           handleRiskChange(risk.id, 'description', e.target.value);
@@ -779,7 +872,7 @@ export default function IctAssetForm({ initialData, onSave, onCancel }: IctAsset
                           <option key={r.id} value={r.scenario}>{r.scenario}</option>
                         ))}
                       </select>
-                      <input type="text" placeholder="Status remedjacji" value={risk.remediationStatus} onChange={(e) => handleRiskChange(risk.id, 'remediationStatus', e.target.value)} className="flex-1 rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-1.5 border" />
+                      <input type="text" placeholder="Status remedjacji" value={risk.remediationStatus ?? ''} onChange={(e) => handleRiskChange(risk.id, 'remediationStatus', e.target.value)} className="flex-1 rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-1.5 border" />
                       <button type="button" onClick={() => handleRiskRemove(risk.id)} className="p-1.5 text-rose-500 hover:bg-rose-100 rounded-md transition-colors">
                         <X className="h-4 w-4" />
                       </button>
@@ -788,6 +881,38 @@ export default function IctAssetForm({ initialData, onSave, onCancel }: IctAsset
                 </div>
               )}
             </div>
+
+            {/* Sekcja powiązanych ryzyk z rejestru */}
+            {initialData && (
+              <div className="md:col-span-2 mt-6 pt-6 border-t border-slate-200">
+                <h4 className="text-sm font-medium text-slate-900 mb-4 flex items-center">
+                  <Shield className="h-4 w-4 mr-2 text-slate-500" />
+                  Powiązane ryzyka z Rejestru Centralnego
+                </h4>
+                
+                {availableRisks.filter(r => r.assetId === formData.id).length > 0 ? (
+                  <div className="bg-slate-50 rounded-md border border-slate-200 overflow-hidden">
+                    <ul className="divide-y divide-slate-200">
+                      {availableRisks
+                        .filter(r => r.assetId === formData.id)
+                        .map(risk => (
+                          <li key={risk.id} className="px-4 py-3 text-sm flex justify-between items-center hover:bg-slate-100 transition-colors">
+                            <div className="flex flex-col">
+                              <span className="font-medium text-slate-700">{risk.scenario}</span>
+                              <span className="text-xs text-slate-500">Status: {risk.actionStatus}</span>
+                            </div>
+                          </li>
+                        ))
+                      }
+                    </ul>
+                  </div>
+                ) : (
+                  <p className="text-sm text-slate-500 italic bg-slate-50 p-4 rounded-md border border-slate-200">
+                    Brak ryzyk w Rejestrze Centralnym powiązanych bezpośrednio z tym zasobem.
+                  </p>
+                )}
+              </div>
+            )}
 
           </div>
         </section>
@@ -865,7 +990,7 @@ export default function IctAssetForm({ initialData, onSave, onCancel }: IctAsset
 
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Standard kryptograficzny</label>
-                  <input type="text" name="cryptoStandard" value={formData.cryptoStandard} onChange={handleChange} placeholder="np. AES-256, TLS 1.3" className="w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border" />
+                  <input type="text" name="cryptoStandard" value={formData.cryptoStandard ?? ''} onChange={handleChange} placeholder="np. AES-256, TLS 1.3" className="w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border" />
                 </div>
               </div>
 
@@ -882,9 +1007,9 @@ export default function IctAssetForm({ initialData, onSave, onCancel }: IctAsset
                   <div className="space-y-2">
                     {formData.vulnerabilities.map((vuln) => (
                       <div key={vuln.id} className="flex items-center gap-2 bg-slate-50 p-2 rounded-md border border-slate-200">
-                        <input type="text" placeholder="CVE ID" value={vuln.cveId} onChange={(e) => handleVulnerabilityChange(vuln.id, 'cveId', e.target.value)} className="w-32 rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-1.5 border" />
-                        <input type="text" placeholder="Opis" value={vuln.description} onChange={(e) => handleVulnerabilityChange(vuln.id, 'description', e.target.value)} className="flex-1 rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-1.5 border" />
-                        <input type="text" placeholder="Status" value={vuln.status} onChange={(e) => handleVulnerabilityChange(vuln.id, 'status', e.target.value)} className="w-32 rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-1.5 border" />
+                        <input type="text" placeholder="CVE ID" value={vuln.cveId ?? ''} onChange={(e) => handleVulnerabilityChange(vuln.id, 'cveId', e.target.value)} className="w-32 rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-1.5 border" />
+                        <input type="text" placeholder="Opis" value={vuln.description ?? ''} onChange={(e) => handleVulnerabilityChange(vuln.id, 'description', e.target.value)} className="flex-1 rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-1.5 border" />
+                        <input type="text" placeholder="Status" value={vuln.status ?? ''} onChange={(e) => handleVulnerabilityChange(vuln.id, 'status', e.target.value)} className="w-32 rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-1.5 border" />
                         <button type="button" onClick={() => handleVulnerabilityRemove(vuln.id)} className="p-1.5 text-rose-500 hover:bg-rose-100 rounded-md transition-colors">
                           <X className="h-4 w-4" />
                         </button>
@@ -974,9 +1099,9 @@ export default function IctAssetForm({ initialData, onSave, onCancel }: IctAsset
                   <div className="space-y-2">
                     {formData.relatedAssets.map((asset) => (
                       <div key={asset.id} className="flex items-center gap-2 bg-slate-50 p-2 rounded-md border border-slate-200">
-                        <input type="text" placeholder="ID zasobu" value={asset.assetId} readOnly className="w-48 rounded-md border-slate-300 shadow-sm bg-slate-100 text-slate-500 sm:text-sm p-1.5 border font-mono" />
+                        <input type="text" placeholder="ID zasobu" value={asset.assetId ?? ''} readOnly className="w-48 rounded-md border-slate-300 shadow-sm bg-slate-100 text-slate-500 sm:text-sm p-1.5 border font-mono" />
                         <select
-                          value={asset.assetName}
+                          value={asset.assetName ?? ''}
                           onChange={(e) => {
                             const selectedAsset = availableAssets.find(a => a.name === e.target.value);
                             handleRelatedAssetChange(asset.id, 'assetName', e.target.value);
@@ -1003,15 +1128,15 @@ export default function IctAssetForm({ initialData, onSave, onCancel }: IctAsset
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Przepływy informacji – dane wchodzące</label>
-                  <textarea name="dataFlowIn" value={formData.dataFlowIn} onChange={handleChange} rows={3} className="w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border" />
+                  <textarea name="dataFlowIn" value={formData.dataFlowIn ?? ''} onChange={handleChange} rows={3} className="w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border" />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Przepływy informacji – dane wychodzące</label>
-                  <textarea name="dataFlowOut" value={formData.dataFlowOut} onChange={handleChange} rows={3} className="w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border" />
+                  <textarea name="dataFlowOut" value={formData.dataFlowOut ?? ''} onChange={handleChange} rows={3} className="w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border" />
                 </div>
                 <div className="md:col-span-2">
                   <label className="block text-sm font-medium text-slate-700 mb-1">Dane w spoczynku – opis</label>
-                  <textarea name="dataAtRestDesc" value={formData.dataAtRestDesc} onChange={handleChange} rows={2} className="w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border" />
+                  <textarea name="dataAtRestDesc" value={formData.dataAtRestDesc ?? ''} onChange={handleChange} rows={2} className="w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border" />
                 </div>
               </div>
 
@@ -1026,19 +1151,19 @@ export default function IctAssetForm({ initialData, onSave, onCancel }: IctAsset
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Data dodania do rejestru</label>
-              <input type="date" name="registryAddDate" value={formData.registryAddDate} onChange={handleChange} className="w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border bg-slate-50" />
+              <input type="date" name="registryAddDate" value={formData.registryAddDate ?? ''} onChange={handleChange} className="w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border bg-slate-50" />
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Data ostatniej aktualizacji</label>
-              <input type="date" name="lastUpdateDate" value={formData.lastUpdateDate} readOnly className="w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border bg-slate-100 text-slate-500" />
+              <input type="date" name="lastUpdateDate" value={formData.lastUpdateDate ?? ''} readOnly className="w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border bg-slate-100 text-slate-500" />
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Autor wpisu</label>
-              <input type="text" name="author" value={formData.author} onChange={handleChange} className="w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border" />
+              <input type="text" name="author" value={formData.author ?? ''} onChange={handleChange} className="w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border" />
             </div>
             <div className="md:col-span-3">
               <label className="block text-sm font-medium text-slate-700 mb-1">Uwagi dodatkowe</label>
-              <textarea name="notes" value={formData.notes} onChange={handleChange} rows={2} className="w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border" />
+              <textarea name="notes" value={formData.notes ?? ''} onChange={handleChange} rows={2} className="w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border" />
             </div>
           </div>
         </section>

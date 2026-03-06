@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { RiskEntry, calculatePRI, calculatePRR, getPRRLevel, IctAsset, Klif } from "../types";
+import { RiskEntry, calculatePRI, calculatePRR, getPRRLevel, IctAsset, Klif, Employee } from "../types";
 import { CATEGORIES, DECISIONS, ACTION_STATUSES } from "../constants";
 import { X, Save } from "lucide-react";
 import { getSupabase } from "../lib/supabase";
@@ -49,6 +49,7 @@ export default function RiskForm({
   );
   const [assets, setAssets] = useState<IctAsset[]>([]);
   const [klifs, setKlifs] = useState<Klif[]>([]);
+  const [employees, setEmployees] = useState<Employee[]>([]);
 
   useEffect(() => {
     if (initialData) {
@@ -64,9 +65,10 @@ export default function RiskForm({
       if (!supabase) return;
 
       try {
-        const [assetsResponse, klifsResponse] = await Promise.all([
+        const [assetsResponse, klifsResponse, empsResponse] = await Promise.all([
           supabase.from('ict_assets').select('*'),
-          supabase.from('klif').select('*')
+          supabase.from('klif').select('*'),
+          supabase.from('employees').select('*')
         ]);
 
         if (assetsResponse.data) {
@@ -74,6 +76,9 @@ export default function RiskForm({
         }
         if (klifsResponse.data) {
           setKlifs(klifsResponse.data as Klif[]);
+        }
+        if (empsResponse.data) {
+          setEmployees(empsResponse.data);
         }
       } catch (error) {
         console.error("Error fetching data for RiskForm:", error);
@@ -409,13 +414,19 @@ export default function RiskForm({
                   <label className="block text-xs font-medium text-slate-700 mb-1">
                     Właściciel Ryzyka
                   </label>
-                  <input
-                    type="text"
+                  <select
                     name="riskOwner"
                     value={formData.riskOwner}
                     onChange={handleChange}
                     className="w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border"
-                  />
+                  >
+                    <option value="">Wybierz właściciela...</option>
+                    {employees.map(emp => (
+                      <option key={emp.id} value={`${emp.first_name} ${emp.last_name}`}>
+                        {emp.first_name} {emp.last_name} ({emp.position})
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-slate-700 mb-1">

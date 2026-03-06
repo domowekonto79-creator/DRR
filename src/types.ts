@@ -272,6 +272,89 @@ export interface Klif {
   dependencies: KlifDependency[];
 }
 
+export interface Employee {
+  id: string;
+  first_name: string;
+  last_name: string;
+  email: string;
+  position: string;
+  department_id: string;
+  department_name?: string; // For display purposes
+  
+  // DORA & ISO 27001 fields
+  security_role?: 'Użytkownik' | 'Administrator' | 'Właściciel Biznesowy' | 'Właściciel Ryzyka' | 'Audytor' | 'CISO';
+  is_key_personnel?: boolean; // Critical for BCP/DRP (DORA Art. 11)
+  last_security_training_date?: string; // ISO A.6.3, DORA Art. 13
+  background_check_status?: 'Zweryfikowany' | 'W toku' | 'Brak' | 'Nie dotyczy'; // ISO A.6.1
+  employment_type?: 'Umowa o pracę' | 'B2B' | 'Zlecenie' | 'Inne';
+}
+
+export interface Incident {
+  id: string;
+  title: string;
+  description: string;
+  status: 'Rejestracja' | 'Analiza' | 'Mitygacja' | 'Zamknięty';
+  severity: 'Niski' | 'Średni' | 'Wysoki' | 'Krytyczny';
+  is_major_incident: boolean; // DORA definition
+  
+  // Dates
+  detection_date: string;
+  occurrence_date: string;
+  resolution_date?: string;
+  duration_minutes?: number;
+  
+  // DORA Classification Criteria
+  affected_clients_count?: number;
+  affected_clients_percent?: number;
+  data_loss_type: 'Brak' | 'Poufność' | 'Integralność' | 'Dostępność' | 'Wiele';
+  financial_impact_value?: number;
+  reputational_impact: 'Brak' | 'Niski' | 'Średni' | 'Wysoki';
+  geographic_spread: 'Lokalny' | 'Krajowy' | 'Transgraniczny (UE)' | 'Globalny';
+  
+  // Relations
+  related_assets: { id: string; name: string }[];
+  related_providers: { id: string; name: string }[];
+  related_klifs: { id: string; name: string }[];
+  
+  // ISO 27001 & RCA
+  root_cause_category: 'Błąd ludzki' | 'Awaria sprzętu' | 'Błąd oprogramowania' | 'Atak cybernetyczny' | 'Błąd procesowy' | 'Dostawca' | 'Siła wyższa' | 'Inne';
+  root_cause_description?: string;
+  actions_taken?: string;
+  lessons_learned?: string;
+  
+  // Reporting (NIS2 / UKSC / DORA)
+  reported_to_knf: boolean;
+  reported_to_csirt: boolean;
+  reporting_date?: string;
+  
+  // Assignment & Tracking
+  assigned_to?: string; // ID or Name of the person handling the incident
+  involved_persons?: string[]; // List of IDs or Names of people who can contribute
+  
+  // Audit Log
+  audit_log?: {
+    date: string;
+    user: string;
+    action: string; // 'Utworzenie', 'Zmiana statusu', 'Edycja', 'Komentarz'
+    details?: string;
+  }[];
+  
+  created_at: string;
+  updated_at: string;
+  author: string;
+}
+
+export interface Department {
+  id: string;
+  name: string;
+  description?: string;
+  manager_id?: string;
+  
+  // DORA & ISO 27001 fields
+  is_critical_unit?: boolean; // Critical function support
+  recovery_time_objective?: string; // Optional RTO for department operations
+}
+
 export function calculatePRI(p: number, n: number): number {
   return p * n;
 }
