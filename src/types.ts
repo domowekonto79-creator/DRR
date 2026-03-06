@@ -295,7 +295,8 @@ export interface Incident {
   description: string;
   status: 'Rejestracja' | 'Analiza' | 'Mitygacja' | 'Zamknięty';
   severity: 'Niski' | 'Średni' | 'Wysoki' | 'Krytyczny';
-  is_major_incident: boolean; // DORA definition
+  is_major_incident: boolean;
+  uksc_incident_type: 'Brak' | 'Zwykły' | 'Istotny' | 'Poważny' | 'Krytyczny'; // DORA definition
   
   // Dates
   detection_date: string;

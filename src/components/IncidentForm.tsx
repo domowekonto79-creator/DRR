@@ -5,7 +5,7 @@ import { Save, X, AlertCircle, Calculator, AlertTriangle, CheckCircle2, Plus, Tr
 
 interface IncidentFormProps {
   initialData?: Incident | null;
-  onSave: () => void;
+  onSave: (shouldClose?: boolean) => void;
   onCancel: () => void;
 }
 
@@ -16,6 +16,7 @@ const DEFAULT_INCIDENT: Incident = {
   status: 'Rejestracja',
   severity: 'Niski',
   is_major_incident: false,
+  uksc_incident_type: 'Brak',
   detection_date: new Date().toISOString().slice(0, 16),
   occurrence_date: new Date().toISOString().slice(0, 16),
   data_loss_type: 'Brak',
@@ -32,7 +33,8 @@ const DEFAULT_INCIDENT: Incident = {
   author: ''
 };
 
-export default function IncidentForm({ initialData, onSave, onCancel }: IncidentFormProps) {
+export default function IncidentForm({ initialData: initialDataProp, onSave, onCancel }: IncidentFormProps) {
+  const [initialData, setInitialData] = useState(initialDataProp);
   const [formData, setFormData] = useState<Incident>(
     initialData || { ...DEFAULT_INCIDENT, id: crypto.randomUUID() }
   );
@@ -138,20 +140,25 @@ export default function IncidentForm({ initialData, onSave, onCancel }: Incident
     alert(`Zaktualizowano klasyfikację:\nPoziom: ${severity}\nPoważny incydent (DORA): ${isMajor ? 'TAK' : 'NIE'}\n\nPowody:\n- ${reasons.join('\n- ')}`);
   };
 
-  const handleSave = async () => {
+  const handleSave = async (isFinal: boolean = false) => {
     if (!formData.title) {
       alert('Tytuł jest wymagany');
       return;
     }
 
     const supabase = getSupabase();
-    if (!supabase) return;
+    if (!supabase) {
+      alert('Błąd: Brak połączenia z bazą danych.');
+      return;
+    }
 
     try {
       // Create audit log entry
-      const currentUser = 'Użytkownik'; // In a real app, this would come from auth context
+      const currentUser = 'Użytkownik'; 
       let action = 'Edycja';
       let details = '';
+
+      const originalData = initialData || DEFAULT_INCIDENT;
 
       if (!initialData) {
         action = 'Utworzenie';
@@ -159,22 +166,30 @@ export default function IncidentForm({ initialData, onSave, onCancel }: Incident
       } else {
         // Calculate changes
         const changes: string[] = [];
-        if (initialData.title !== formData.title) changes.push(`Tytuł: "${initialData.title}" -> "${formData.title}"`);
-        if (initialData.description !== formData.description) changes.push('Zmieniono opis');
-        if (initialData.status !== formData.status) changes.push(`Status: ${initialData.status} -> ${formData.status}`);
-        if (initialData.severity !== formData.severity) changes.push(`Krytyczność: ${initialData.severity} -> ${formData.severity}`);
-        if (initialData.assigned_to !== formData.assigned_to) changes.push(`Przypisano: ${initialData.assigned_to || 'Brak'} -> ${formData.assigned_to || 'Brak'}`);
-        if (initialData.is_major_incident !== formData.is_major_incident) changes.push(`Poważny incydent: ${initialData.is_major_incident ? 'TAK' : 'NIE'} -> ${formData.is_major_incident ? 'TAK' : 'NIE'}`);
+        if (originalData.title !== formData.title) changes.push(`Tytuł: "${originalData.title}" -> "${formData.title}"`);
+        if (originalData.description !== formData.description) changes.push('Zmieniono opis');
+        if (originalData.status !== formData.status) changes.push(`Status: ${originalData.status} -> ${formData.status}`);
+        if (originalData.severity !== formData.severity) changes.push(`Krytyczność: ${originalData.severity} -> ${formData.severity}`);
+        if (originalData.assigned_to !== formData.assigned_to) changes.push(`Przypisano: ${originalData.assigned_to || 'Brak'} -> ${formData.assigned_to || 'Brak'}`);
+        if (originalData.is_major_incident !== formData.is_major_incident) changes.push(`Poważny incydent: ${originalData.is_major_incident ? 'TAK' : 'NIE'} -> ${formData.is_major_incident ? 'TAK' : 'NIE'}`);
+        if (originalData.uksc_incident_type !== formData.uksc_incident_type) changes.push(`Klasyfikacja UKSC: ${originalData.uksc_incident_type} -> ${formData.uksc_incident_type}`);
+        if (originalData.detection_date !== formData.detection_date) changes.push('Zmieniono datę wykrycia');
+        if (originalData.occurrence_date !== formData.occurrence_date) changes.push('Zmieniono datę wystąpienia');
         
-        // Check arrays length or content simply
-        if (JSON.stringify(initialData.involved_persons?.sort()) !== JSON.stringify(formData.involved_persons?.sort())) changes.push('Zaktualizowano listę osób zaangażowanych');
-        if (initialData.related_assets.length !== formData.related_assets.length) changes.push('Zmieniono powiązane zasoby');
-        if (initialData.related_providers.length !== formData.related_providers.length) changes.push('Zmieniono powiązanych dostawców');
-        if (initialData.related_klifs.length !== formData.related_klifs.length) changes.push('Zmieniono powiązane funkcje KLIF');
+        if (originalData.affected_clients_count !== formData.affected_clients_count) changes.push(`Liczba klientów: ${formData.affected_clients_count}`);
+        if (originalData.affected_clients_percent !== formData.affected_clients_percent) changes.push(`Procent klientów: ${formData.affected_clients_percent}%`);
+        if (originalData.financial_impact_value !== formData.financial_impact_value) changes.push(`Wpływ finansowy: ${formData.financial_impact_value} PLN`);
+        if (originalData.data_loss_type !== formData.data_loss_type) changes.push(`Typ utraty danych: ${formData.data_loss_type}`);
+        if (originalData.geographic_spread !== formData.geographic_spread) changes.push(`Zasięg: ${formData.geographic_spread}`);
+        
+        if (JSON.stringify(originalData.involved_persons?.sort()) !== JSON.stringify(formData.involved_persons?.sort())) changes.push('Zaktualizowano listę osób zaangażowanych');
+        if (JSON.stringify(originalData.related_assets?.sort()) !== JSON.stringify(formData.related_assets?.sort())) changes.push('Zmieniono powiązane zasoby');
+        if (JSON.stringify(originalData.related_providers?.sort()) !== JSON.stringify(formData.related_providers?.sort())) changes.push('Zmieniono powiązanych dostawców');
+        if (JSON.stringify(originalData.related_klifs?.sort()) !== JSON.stringify(formData.related_klifs?.sort())) changes.push('Zmieniono powiązane funkcje KLIF');
 
-        if (initialData.root_cause_category !== formData.root_cause_category) changes.push(`Przyczyna: ${initialData.root_cause_category} -> ${formData.root_cause_category}`);
-        if (initialData.reported_to_knf !== formData.reported_to_knf) changes.push(`Zgłoszono KNF: ${formData.reported_to_knf ? 'TAK' : 'NIE'}`);
-        if (initialData.reported_to_csirt !== formData.reported_to_csirt) changes.push(`Zgłoszono CSIRT: ${formData.reported_to_csirt ? 'TAK' : 'NIE'}`);
+        if (originalData.root_cause_category !== formData.root_cause_category) changes.push(`Przyczyna: ${originalData.root_cause_category} -> ${formData.root_cause_category}`);
+        if (originalData.reported_to_knf !== formData.reported_to_knf) changes.push(`Zgłoszono KNF: ${formData.reported_to_knf ? 'TAK' : 'NIE'}`);
+        if (originalData.reported_to_csirt !== formData.reported_to_csirt) changes.push(`Zgłoszono CSIRT: ${formData.reported_to_csirt ? 'TAK' : 'NIE'}`);
 
         if (changes.length === 0) {
           details = 'Zapisano bez zmian';
@@ -197,11 +212,21 @@ export default function IncidentForm({ initialData, onSave, onCancel }: Incident
       };
 
       const { error } = await supabase.from('incidents').upsert(updatedFormData);
-      if (error) throw error;
-      onSave();
+      
+      if (error) {
+        console.error('Supabase upsert error:', error);
+        alert('Błąd zapisu: ' + error.message);
+        return;
+      }
+
+      setInitialData(updatedFormData);
+      setFormData(updatedFormData);
+      alert('Zmiany zostały zapisane pomyślnie.');
+      onSave(true); // Always close the window after successful save
+
     } catch (error: any) {
-      console.error('Error saving incident:', error);
-      alert('Błąd zapisu: ' + error.message);
+      console.error('Unexpected error in handleSave:', error);
+      alert('Wystąpił nieoczekiwany błąd: ' + (error.message || 'Nieznany błąd'));
     }
   };
 
@@ -401,46 +426,87 @@ export default function IncidentForm({ initialData, onSave, onCancel }: Incident
               </div>
             </div>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Czas trwania (minuty)</label>
-                <input type="number" name="duration_minutes" value={formData.duration_minutes || ''} onChange={handleChange} className="w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border" />
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {/* DORA Section */}
+              <div className="bg-blue-50 p-4 rounded-lg border border-blue-200 text-sm text-blue-800 space-y-3">
+                <h4 className="font-semibold">Przesłanki klasyfikacji (DORA - Art. 18)</h4>
+                <ul className="list-disc pl-5 space-y-1 text-xs">
+                  <li><b>Poważny incydent:</b> Czas trwania &gt; 24h, LUB wpływ na &gt;10% klientów, LUB wpływ na funkcję krytyczną (KLIF), LUB wpływ finansowy &gt; 100k PLN.</li>
+                  <li><b>Krytyczność 'Wysoki':</b> Czas trwania &gt; 4h, LUB wpływ na &gt;1% klientów, LUB naruszenie integralności/danych.</li>
+                </ul>
+                <a href="https://eur-lex.europa.eu/legal-content/PL/TXT/?uri=CELEX:32022R2554" target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline block">Zobacz Art. 18 DORA</a>
+                
+                <div className="pt-2 space-y-4 bg-white/60 p-3 rounded-md border border-blue-200">
+                  <h5 className="text-xs font-bold text-slate-600 uppercase">Pola do oceny DORA</h5>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Liczba dotkniętych klientów</label>
+                    <input type="number" name="affected_clients_count" value={formData.affected_clients_count || ''} onChange={handleChange} className="w-full rounded-md border-slate-300 shadow-sm text-sm p-2 border" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Procent bazy klientów (%)</label>
+                    <input type="number" name="affected_clients_percent" value={formData.affected_clients_percent || ''} onChange={handleChange} className="w-full rounded-md border-slate-300 shadow-sm text-sm p-2 border" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Wpływ finansowy (PLN)</label>
+                    <input type="number" name="financial_impact_value" value={formData.financial_impact_value || ''} onChange={handleChange} className="w-full rounded-md border-slate-300 shadow-sm text-sm p-2 border" />
+                  </div>
+                </div>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Liczba dotkniętych klientów</label>
-                <input type="number" name="affected_clients_count" value={formData.affected_clients_count || ''} onChange={handleChange} className="w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border" />
+              {/* UKSC/NIS2 Section */}
+              <div className="bg-amber-50 p-4 rounded-lg border border-amber-200 text-sm text-amber-800 space-y-3">
+                <h4 className="font-semibold">Przesłanki klasyfikacji (NIS2 / UKSC)</h4>
+                <ul className="list-disc pl-5 space-y-1 text-xs">
+                  <li><b>Incydent Poważny (NIS2):</b> Znaczne zakłócenie usługi kluczowej LUB straty finansowe, LUB duża szkoda.</li>
+                  <li><b>Incydent Istotny (UKSC):</b> Dotyczy usługi kluczowej, wpływa na ciągłość, powoduje zagrożenie.</li>
+                  <li><b>Incydent Krytyczny (UKSC):</b> Skutki o znacznej skali.</li>
+                </ul>
+                <a href="https://legislacja.rcl.gov.pl/projekt/12379430" target="_blank" rel="noopener noreferrer" className="text-xs text-amber-600 hover:underline block">Zobacz proces legislacyjny (UKSC/NIS2)</a>
+                
+                 <div className="pt-2 space-y-4 bg-white/60 p-3 rounded-md border border-amber-200">
+                  <h5 className="text-xs font-bold text-slate-600 uppercase">Pola do oceny UKSC</h5>
+                   <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Klasyfikacja incydentu (UKSC)</label>
+                    <select name="uksc_incident_type" value={formData.uksc_incident_type} onChange={handleChange} className="w-full rounded-md border-slate-300 shadow-sm text-sm p-2 border">
+                      <option value="Brak">Brak / Nie dotyczy</option>
+                      <option value="Zwykły">Zwykły</option>
+                      <option value="Istotny">Istotny (Zgłoszenie S46)</option>
+                      <option value="Poważny">Poważny (wg. NIS2, Zgłoszenie S46)</option>
+                      <option value="Krytyczny">Krytyczny (Zgłoszenie S46)</option>
+                    </select>
+                    <p className="text-xs text-slate-500 mt-2">Incydenty <span className="font-semibold">Istotne, Poważne i Krytyczne</span> podlegają zgłoszeniu do CSIRT (S46) w ciągu 24h.</p>
+                  </div>
+                </div>
               </div>
+            </div>
 
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Procent bazy klientów (%)</label>
-                <input type="number" name="affected_clients_percent" value={formData.affected_clients_percent || ''} onChange={handleChange} className="w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border" />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Utrata danych</label>
-                <select name="data_loss_type" value={formData.data_loss_type} onChange={handleChange} className="w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border">
-                  <option value="Brak">Brak</option>
-                  <option value="Poufność">Poufność (Wyciek)</option>
-                  <option value="Integralność">Integralność (Zmiana)</option>
-                  <option value="Dostępność">Dostępność (Brak dostępu)</option>
-                  <option value="Wiele">Wiele</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Wpływ finansowy (PLN)</label>
-                <input type="number" name="financial_impact_value" value={formData.financial_impact_value || ''} onChange={handleChange} className="w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border" />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Zasięg geograficzny</label>
-                <select name="geographic_spread" value={formData.geographic_spread} onChange={handleChange} className="w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border">
-                  <option value="Lokalny">Lokalny</option>
-                  <option value="Krajowy">Krajowy</option>
-                  <option value="Transgraniczny (UE)">Transgraniczny (UE)</option>
-                  <option value="Globalny">Globalny</option>
-                </select>
+            {/* Common Fields */}
+            <div className="pt-4">
+              <h4 className="text-sm font-semibold text-slate-600 mb-2 border-b pb-1">Pola wspólne dla DORA i UKSC</h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Czas trwania (minuty)</label>
+                  <input type="number" name="duration_minutes" value={formData.duration_minutes || ''} onChange={handleChange} className="w-full rounded-md border-slate-300 shadow-sm text-sm p-2 border" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Utrata danych</label>
+                  <select name="data_loss_type" value={formData.data_loss_type} onChange={handleChange} className="w-full rounded-md border-slate-300 shadow-sm text-sm p-2 border">
+                    <option value="Brak">Brak</option>
+                    <option value="Poufność">Poufność (Wyciek)</option>
+                    <option value="Integralność">Integralność (Zmiana)</option>
+                    <option value="Dostępność">Dostępność (Brak dostępu)</option>
+                    <option value="Wiele">Wiele</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Zasięg geograficzny</label>
+                  <select name="geographic_spread" value={formData.geographic_spread} onChange={handleChange} className="w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border">
+                    <option value="Lokalny">Lokalny</option>
+                    <option value="Krajowy">Krajowy</option>
+                    <option value="Transgraniczny (UE)">Transgraniczny (UE)</option>
+                    <option value="Globalny">Globalny</option>
+                  </select>
+                </div>
               </div>
             </div>
           </div>
@@ -584,14 +650,14 @@ export default function IncidentForm({ initialData, onSave, onCancel }: Incident
             <h3 className="text-lg font-medium text-slate-900 border-b border-slate-200 pb-2">5. Raportowanie (DORA / NIS2)</h3>
             
             <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
-              <p className="text-sm text-slate-600 mb-4">
+              <div className="text-sm text-slate-600 mb-4">
                 Zgodnie z DORA, poważne incydenty ICT należy zgłaszać do właściwych organów (KNF) w określonych terminach:
                 <ul className="list-disc pl-5 mt-2 space-y-1">
                   <li>Wstępne zgłoszenie: do 24h od wykrycia</li>
                   <li>Raport pośredni: do 72h</li>
                   <li>Raport końcowy: do 1 miesiąca od zamknięcia</li>
                 </ul>
-              </p>
+              </div>
 
               <div className="space-y-4">
                 <div className="flex items-center">
@@ -627,7 +693,7 @@ export default function IncidentForm({ initialData, onSave, onCancel }: Incident
         
         <div className="flex gap-3">
           <button
-            onClick={handleSave}
+            onClick={() => handleSave(false)}
             className="px-4 py-2 border border-slate-300 rounded-md shadow-sm text-sm font-medium text-slate-700 bg-white hover:bg-slate-50 flex items-center"
           >
             <Save className="h-4 w-4 mr-2" /> Zapisz zmiany
@@ -642,7 +708,7 @@ export default function IncidentForm({ initialData, onSave, onCancel }: Incident
             </button>
           ) : (
             <button
-              onClick={handleSave}
+              onClick={() => handleSave(true)}
               className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 flex items-center"
             >
               <CheckCircle2 className="h-4 w-4 mr-2" /> Zakończ

@@ -190,6 +190,7 @@ CREATE TABLE IF NOT EXISTS incidents (
     status TEXT, -- 'Rejestracja', 'Analiza', 'Mitygacja', 'Zamknięty'
     severity TEXT, -- 'Niski', 'Średni', 'Wysoki', 'Krytyczny'
     is_major_incident BOOLEAN DEFAULT FALSE, -- DORA definition
+    uksc_incident_type TEXT, -- 'Brak', 'Zwykły', 'Istotny', 'Poważny', 'Krytyczny'
     
     -- Dates
     detection_date TIMESTAMPTZ,

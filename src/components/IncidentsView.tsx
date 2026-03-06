@@ -27,7 +27,7 @@ export default function IncidentsView() {
     const { data, error } = await supabase
       .from('incidents')
       .select('*')
-      .order('created_at', { ascending: false });
+      .order('updated_at', { ascending: false });
 
     if (error) {
       console.error('Error fetching incidents:', error);
@@ -37,10 +37,12 @@ export default function IncidentsView() {
     setLoading(false);
   };
 
-  const handleSave = () => {
+  const handleSave = (shouldClose: boolean = true) => {
     fetchIncidents();
-    setShowForm(false);
-    setEditingIncident(null);
+    if (shouldClose) {
+      setShowForm(false);
+      setEditingIncident(null);
+    }
   };
 
   const filteredIncidents = incidents.filter(incident => {
